@@ -7,9 +7,8 @@
 .DS_Store
 TODO.md
 
-projects/
+themes/
 temp/
-build_release/
 build_debug/
 
 focus
