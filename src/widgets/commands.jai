@@ -101,6 +101,7 @@ base_commands := #run -> [] Command {
 
         cmd( "Switch To Project",                 .switch_to_project,                .None   ),
         cmd( "Close Project",                     .close_project,                    .None   ),
+        cmd( "Reload Workspace",                  .reload_workspace,                 .None   ),
         cmd( "Open Directory With Project Files", .open_projects_directory,          .None   ),
         cmd( "Open Project Config",               .open_project_config,              .None   ),
         cmd( "Open Global Config",                .open_global_config,               .None   ),
@@ -143,6 +144,8 @@ base_commands := #run -> [] Command {
         cmd( "Delete Line And Go Up",             .delete_line_and_go_up,            .Single ),
         cmd( "Delete To Start Of Line",           .delete_to_start_of_line,          .Single ),
         cmd( "Delete To End Of Line",             .delete_to_end_of_line,            .Single ),
+        cmd( "Cut To Start Of Line",              .cut_to_start_of_line,             .Single ),
+        cmd( "Cut To End Of Line",                .cut_to_end_of_line,               .Single ),
         cmd( "Move Selected Lines Up",            .move_selected_lines_up,           .Single ),
         cmd( "Move Selected Lines Down",          .move_selected_lines_down,         .Single ),
         cmd( "Move Up To Empty Line",             .move_up_to_empty_line,            .Single ),
@@ -156,8 +159,8 @@ base_commands := #run -> [] Command {
         cmd( "Add Cursors To Line Starts",        .add_cursors_to_line_starts,       .Single ),
         cmd( "Align Cursors",                     .align_cursors,                    .Single ),
 
-        cmd( "Move To Previous Cursor Position",  .move_to_previous_editor_history,  .None   ),
-        cmd( "Move To Next Cursor Position",      .move_to_next_editor_history,      .None   ),
+        cmd( "Cursor: Go Back",                   .move_to_previous_editor_history,  .None   ),
+        cmd( "Cursor: Go Forward",                .move_to_next_editor_history,      .None   ),
 
         cmd( "New Line Below Without Breaking",   .new_line_below_without_breaking,  .Single ),
         cmd( "New Line Above Without Breaking",   .new_line_above_without_breaking,  .Single ),
@@ -179,10 +182,11 @@ base_commands := #run -> [] Command {
         cmd( "Toggle Line Wrap",                  .toggle_line_wrap,                 .Single ),
         cmd( "Toggle Line Numbers",               .toggle_line_numbers,              .Single ),
         cmd( "Toggle Fullscreen",                 .toggle_fullscreen,                .None   ),
-        cmd( "Toggle Build Panel",                .toggle_build_panel,               .None   ),
 
         cmd( "Build: Kill Running Command",       .build_kill_running_command,       .None   ),
         cmd( "Build: Clear Build Output",         .build_clear_output,               .None   ),
+        cmd( "Build: Toggle Build Panel",         .build_panel_toggle,               .None   ),
+        cmd( "Build: Toggle Build Panel Focus",   .build_panel_toggle_focus,         .None   ),
 
         cmd( "Autoindent Region",                 .autoindent_region,                .Single ),
 
@@ -190,6 +194,12 @@ base_commands := #run -> [] Command {
         cmd( "Copy Current Line Info",            .copy_current_line_info,           .Single ),
 
         cmd( "Choose Language Syntax",            .choose_language,                  .Single ),
+        cmd( "Reload File From Disk",             .reload_from_disk,                 .Single ),
+
+        cmd( "Indentation: Detect From File Contents",          .indentation_detect_from_buffer_contents,  .Single),
+        cmd( "Indentation: Use Defaults For File",              .indentation_use_defaults_for_buffer,      .Single),
+        cmd( "Indentation: Convert File Indentation To Tabs",   .indentation_convert_to_tabs_for_buffer,   .Single),
+        cmd( "Indentation: Convert File Indentation To Spaces", .indentation_convert_to_spaces_for_buffer, .Single),
     ];
 
     linux_commands := Command.[

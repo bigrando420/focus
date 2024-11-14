@@ -142,7 +142,8 @@ offset_to_real_coords :: (buffer: Buffer, offset: s32) -> Coords {
 
 // This function counts visual indent, taking tab size into account
 _get_visual_col_by_scanning_line :: (buffer: Buffer, line_num: s32, offset: s32, line_starts: [] s32) -> col: s32 {
-    return num_cols_in_string(xx to_view(buffer.bytes, line_starts[line_num], offset - line_starts[line_num]));
+    tab_size := get_buffer_tab_size(buffer);
+    return num_cols_in_string(xx to_view(buffer.bytes, line_starts[line_num], offset - line_starts[line_num]), tab_size);
 }
 
 get_cursor_coords :: (editor: Editor, buffer: Buffer, using cursor: Cursor) -> Cursor_Coords {
@@ -170,6 +171,71 @@ offset_to_real_line :: (using buffer: Buffer, offset: s64) -> line_num: s32 {
     assert(offset <= bytes.count, "offset exceeds buffer size, can't calculate line");
 
     return search_line_num_by_offset(to_view(line_starts), offset);
+}
+
+Editor_Cursor_Position :: struct { editor_id: s64; cursor_id: s64; coords: Cursor_Coords; }
+
+remember_cursor_positions :: (buffer_id: s64, in: enum { all_editors; active_editor; }) -> [] Editor_Cursor_Position /* temp */ {
+    buffer := *open_buffers[buffer_id];
+
+    cursor_positions: [..] Editor_Cursor_Position;
+    cursor_positions.allocator = temp;
+
+    for * editor, editor_id : open_editors {
+        if editor.buffer_id != buffer_id continue;
+        if in == .active_editor && editor_id != editors.active continue;
+        editor.refresh_selection = true;
+
+        new_edit_group(buffer, editor);
+
+        for cursor, cursor_id : editor.cursors {
+            array_add(*cursor_positions, Editor_Cursor_Position.{ editor_id, cursor_id, get_real_cursor_coords(buffer, cursor) });
+        }
+    }
+
+    // We also want to remember cursors in the buffer itself for the subsequent undos, preferably from the active editor
+    editor_cursors: [] Cursor;
+    active_editor, _ := get_active_editor_and_buffer();
+    if active_editor && active_editor.buffer_id == buffer_id {
+        editor_cursors = to_view(active_editor.cursors);
+    } else {
+        // Just take any editor
+        for editor : open_editors {
+            if editor.buffer_id == buffer_id {
+                editor_cursors = to_view(editor.cursors);
+                break;
+            }
+        }
+    }
+    if editor_cursors {
+        resize(*buffer.cursors, editor_cursors.count);
+        for * cursor, i : buffer.cursors { cursor.* = editor_cursors[i]; }
+    }
+
+    return cursor_positions;
+}
+
+restore_cursor_positions :: (buffer_id: s64, cursor_positions: [] Editor_Cursor_Position) {
+    buffer := *open_buffers[buffer_id];
+    if buffer.dirty then rescan_for_lines(buffer);
+
+    tab_size := get_buffer_tab_size(buffer);
+
+    max_line := cast(s32) buffer.line_starts.count - 2;
+    for position : cursor_positions {
+        using position;
+        editor := *open_editors[editor_id];
+
+        pos, sel := coords.pos, coords.sel;
+        pos.line = clamp(pos.line, 0, max_line);
+        pos.col  = clamp(pos.col,  0, num_cols_in_string(get_real_line_as_string(buffer, pos.line), tab_size));
+        sel.line = clamp(sel.line, 0, max_line);
+        sel.col  = clamp(sel.col,  0, num_cols_in_string(get_real_line_as_string(buffer, sel.line), tab_size));
+
+        cursor := *editor.cursors[cursor_id];
+        cursor.pos = real_coords_to_offset(buffer, pos);
+        cursor.sel = real_coords_to_offset(buffer, sel);
+    }
 }
 
 search_line_num_by_offset :: (line_starts: [] s32, offset: s64) -> line_num: s32 {
@@ -210,6 +276,8 @@ real_coords_to_offset :: (using buffer: Buffer, coords: Coords) -> s32 {
 }
 
 _get_offset_by_coords :: (buffer: Buffer, line_starts: [] s32, coords: Coords) -> offset: s32 {
+    tab_size := get_buffer_tab_size(buffer);
+
     line := clamp(coords.line, 0, cast(s32)line_starts.count - 2);
     offset := line_starts[line];
     if offset >= buffer.bytes.count return xx buffer.bytes.count;
@@ -220,7 +288,7 @@ _get_offset_by_coords :: (buffer: Buffer, line_starts: [] s32, coords: Coords) -
     col := 0;
     while true {
         byte := buffer.bytes[offset];
-        if byte != #char "\t" then col += 1; else col += TAB_SIZE - col % TAB_SIZE;
+        if byte != #char "\t" then col += 1; else col += tab_size - col % tab_size;
         if col > coords.col break;
         next_offset := offset + 1 + trailingBytesForUTF8[byte];
         if next_offset >= max_offset {
@@ -392,6 +460,8 @@ rescan_for_wrapped_lines :: (editor: *Editor, buffer: Buffer) {
     reset_keeping_memory(*editor.wrapped_line_starts);
     reserve(*editor.wrapped_line_starts, buffer.line_starts.count);  // can't be less than that
 
+    tab_size := get_buffer_tab_size(buffer);
+
     add(*editor.wrapped_line_starts, 0);  // first line
 
     max_width_in_chars := ifx editor.last_width_in_chars > 0 then editor.last_width_in_chars else S32_MAX;
@@ -405,7 +475,7 @@ rescan_for_wrapped_lines :: (editor: *Editor, buffer: Buffer) {
         this_char_index := i;
 
         if byte == #char "\t" {  // I hate tabs
-            current_line_width += TAB_SIZE - current_line_width % TAB_SIZE;
+            current_line_width += tab_size - current_line_width % tab_size;
             i += 1;
         } else {
             if byte != #char "\n" current_line_width += 1;  // don't count newlines towards the width to avoid wrapping them
@@ -478,6 +548,7 @@ tokenize_for_indentation :: (buffer: *Buffer) -> [] Indentation_Token /* temp */
         case .C;            return tokenize_c_like_lang_for_indentation(buffer, get_next_c_token);
         case .Cpp;          return tokenize_c_like_lang_for_indentation(buffer, get_next_cpp_token);
         case .Css;          return tokenize_c_like_lang_for_indentation(buffer, get_next_css_token);
+        case .D;            return tokenize_c_like_lang_for_indentation(buffer, get_next_d_token);
         case .Js;           return tokenize_c_like_lang_for_indentation(buffer, get_next_js_token);
         case .Json;         return tokenize_c_like_lang_for_indentation(buffer, get_next_json_token);
         case .Glsl;         return tokenize_c_like_lang_for_indentation(buffer, get_next_glsl_token);
@@ -494,7 +565,7 @@ tokenize_for_indentation :: (buffer: *Buffer) -> [] Indentation_Token /* temp */
     return .[];
 }
 
-get_base_indent_from_line :: (buffer: Buffer, line_num: s32, tokens: [] Indentation_Token) -> level: int, next_level: int {
+get_base_indent_from_line :: (buffer: Buffer, line_num: s32, tokens: [] Indentation_Token, tab_size: s32) -> level: int, next_level: int {
     line := get_real_line_as_string(buffer, line_num);
     if !line return 0, 0;
 
@@ -504,14 +575,14 @@ get_base_indent_from_line :: (buffer: Buffer, line_num: s32, tokens: [] Indentat
         if byte == #char " " {
             col += 1;
         } else if byte == #char "\t" {
-            col += TAB_SIZE - col % TAB_SIZE;  // tabs are evil
+            col += tab_size - col % tab_size;  // tabs are evil
         } else {
             advance(*line, i);
             break;
         }
     }
 
-    base_level := (col + TAB_SIZE - 1) / TAB_SIZE;
+    base_level := (col + tab_size - 1) / tab_size;
 
     // Get the next level
     start := get_real_line_start_offset(buffer, line_num);
@@ -696,7 +767,7 @@ save_buffer_to_file :: (buffer: *Buffer, buffer_id: s64, file_path: string) {
             log_error("Couldn't write to file %", file_path);
             return;
         }
-        refresh_buffer_from_disk(file_path);
+        refresh_buffer_from_disk_by_path(file_path);
         new_id, created := find_or_create_buffer(file_path);
         assert(!created, "Buffer is unexpectedly created when it was supposed to already exist");
         if new_id < 0 return;  // logged elsewhere
@@ -794,7 +865,10 @@ delete_buffer_from_disk :: (using buffer: *Buffer) -> deleted: bool {
 strip_trailing_whitespace :: (using buffer: *Buffer, buffer_id: s64, except_lines_with_cursor := false) {
     auto_release_temp();
 
-    // Get active cursor positions if we're saving the active buffer
+    tab_size := get_buffer_tab_size(buffer);
+
+    // Get active cursor offsets if we're saving the active buffer
+    // so that we can keep them where they are if the corresponding option is enabled
     active_cursors: [] s32;
     {
         editor, _ := get_active_editor_and_buffer();
@@ -804,94 +878,168 @@ strip_trailing_whitespace :: (using buffer: *Buffer, buffer_id: s64, except_line
         }
     }
 
-    // Prepare the stripped buffer contents
-    b: String_Builder;
-    b.allocator = temp;
-    init_string_builder(*b, buffer_size = bytes.count + size_of(String_Builder.Buffer));
+    // Record a list of edits we need to make in order to strip the whitespace,
+    // one edit per line. The reason for this is to leverage the edit notification system
+    // to properly adjust cursors in other editors, including on undo/redo.
+    delete_edits: [..] Offset_Range;
+    delete_edits.allocator = temp;
 
     line_start := line_starts[0];
     for line_end : to_view(line_starts, 1, line_starts.count - 1) {
         line := string.{ count = line_end - line_start, data = bytes.data + line_start };
+        if ends_with(line, cast(u8) #char "\n") then line.count -= 1;
+        if line.count >= 1 {
+            trim_after := trim_right(line).count;
 
-        pos_of_rightmost_cursor_on_this_line := -1;
-        if except_lines_with_cursor {
-            // Keep cursors where they are
-            c := active_cursors;
-            for pos : c {
-                if pos < line_start {
-                    // Don't check this cursor for subsequent lines
-                    active_cursors.count -= 1;
-                    active_cursors.data  += 1;
-                } else if pos < line_end {
-                    pos_of_rightmost_cursor_on_this_line = pos;
-                } else {
-                    break;  // no need to check any other cursors for this line
+            pos_of_rightmost_cursor_on_this_line := -1;
+            if except_lines_with_cursor {
+                // Keep cursors where they are
+                c := active_cursors;
+                for pos : c {
+                    if pos < line_start {
+                        // Don't check this cursor for subsequent lines
+                        active_cursors.count -= 1;
+                        active_cursors.data  += 1;
+                    } else if pos < line_end {
+                        pos_of_rightmost_cursor_on_this_line = pos - line_start;
+                    } else {
+                        break;  // no need to check any other cursors for this line
+                    }
                 }
+                if pos_of_rightmost_cursor_on_this_line >= trim_after then trim_after = pos_of_rightmost_cursor_on_this_line;
             }
-            if pos_of_rightmost_cursor_on_this_line >= 0 {
-                length := pos_of_rightmost_cursor_on_this_line - line_start;
-                line_until_cursor := slice(line, 0, length);
-                append(*b, line_until_cursor);  // preserve the line up to the rightmost cursor even if it's all whitespace
-                safe_advance(*line, length);
+            if trim_after < line.count {
+                array_add(*delete_edits, Offset_Range.{ xx (line_start + trim_after), xx (line_start + line.count) });
             }
         }
-
-        append(*b, trim_right(line));
-        append(*b, "\n");
 
         line_start = line_end;
     }
 
-    stripped := builder_to_string(*b,, allocator = temp);
-    if stripped then stripped.count -= 1;  // remove the trailing newline we've added
+    if !delete_edits return;  // nothing to do
 
-    if stripped.count == bytes.count return;  // nothing stripped
+    // Only remember and restore cursor positions in the active editor.
+    // Any other editors will be handled by the edit notifications
+    cursor_positions := remember_cursor_positions(buffer_id, in = .active_editor);
 
-    // Remember all cursor positions in all editors for the buffer
-    Editor_Cursor_State :: struct { editor_id: s64; cursor_id: s64; coords: Cursor_Coords; }
-    cursor_states: [..] Editor_Cursor_State;
-    cursor_states.allocator = temp;
-    for * editor, editor_id : open_editors {
-        if editor.buffer_id != buffer_id continue;
-        editor.refresh_selection = true;
-
-        for cursor, cursor_id : editor.cursors {
-            array_add(*cursor_states, Editor_Cursor_State.{ editor_id, cursor_id, get_real_cursor_coords(buffer, cursor) });
-        }
+    // Apply the delete edits
+    offset_difference: s32 = 0;
+    for delete_edits {
+        range := it;
+        range.start -= offset_difference;
+        range.end   -= offset_difference;
+        delete_range(buffer, range);
+        offset_difference += range.end - range.start;
     }
 
-    // Replace buffer contents
-    new_replace_edit(buffer, 0, bytes.count, to_string(bytes), stripped);
+    restore_cursor_positions(buffer_id, cursor_positions);
+    refresh_all_editors_for_buffer(buffer_id);
+}
 
-    lock(*content_lock);
-    focus_memcpy(bytes.data, stripped.data, stripped.count);
-    bytes.count = cast(s32) stripped.count;
-    unlock(*content_lock);
+indentation_detect_from_buffer_contents :: (buffer: *Buffer) {
+    result := detect_and_set_indentation(buffer);
 
-    dirty = true;
-    rescan_for_lines(buffer);
+    if #complete result == {
+        case .success;
+            if buffer.indentation.type == .tabs {
+                add_success_message("Tabs detected for indentation\nTab size is set to % (based on config)", buffer.indentation.size, dismiss_in_seconds = 5);
+            } else {
+                add_success_message("Spaces detected for indentation\nIndentation width is set to %", buffer.indentation.size, dismiss_in_seconds = 5);
+            }
+            buffer.indentation.was_manually_set = true;
 
-    for * editor, editor_id : open_editors {
-        if editor.buffer_id != buffer_id continue;
-        if line_wrap_is_active(editor) then rescan_for_wrapped_lines(editor, buffer);
+        case .not_enough_data;  add_user_warning("Not enough data to determine file indentation. Using defaults (%: %)", ifx buffer.indentation.type == .spaces then "Spaces" else "Tabs", buffer.indentation.size);
+        case .error;            add_user_error("Could not determine file indentation");
+    }
+}
+
+indentation_use_defaults_for_buffer :: (using buffer: *Buffer) {
+    indentation.type = config.settings.indent_using;
+    indentation.size = cast(u8) config.settings.tab_size;
+    add_success_message("Using defaults (%: %) for this file", ifx indentation.type == .spaces then "Spaces" else "Tabs", indentation.size, dismiss_in_seconds = 5);
+}
+
+Replace_Edit :: struct { range: Offset_Range; new_string: string; }
+
+indentation_convert_to_tabs_for_buffer :: (buffer: *Buffer, buffer_id: s64) {
+    auto_release_temp();
+
+    tab_size := get_buffer_tab_size(buffer);
+
+    // Add an edit for each replaced line, to make sure cursors are adjusted properly everywhere
+    replace_edits: [..] Replace_Edit;
+    replace_edits.allocator = temp;
+
+    for line : split(to_string(buffer.bytes), cast(u8) #char "\n") {
+        indent, num_bytes := get_visual_indent_in_spaces(line, tab_size);
+        if !indent continue;
+
+        num_tabs_to_indent  := indent / tab_size;
+        num_spaces_to_align := indent % tab_size;  // it's not always possible to get the same indentation without using spaces
+
+        line_start := cast(s32) (line.data - buffer.bytes.data);
+        array_add(*replace_edits, Replace_Edit.{
+            range = .{ line_start , line_start + cast(s32) num_bytes },
+            new_string = tprint("%1%2", get_tmp_tabs(num_tabs_to_indent), get_tmp_spaces(num_spaces_to_align)),
+        });
     }
 
-    // Put cursors into valid places
-    max_line := cast(s32) buffer.line_starts.count - 2;
-    for state : cursor_states {
-        using state;
-        editor := *open_editors[editor_id];
+    // Apply the edits
+    cursor_positions := remember_cursor_positions(buffer_id, in = .active_editor);
 
-        pos, sel := coords.pos, coords.sel;
-        pos.line = clamp(pos.line, 0, max_line);
-        pos.col  = clamp(pos.col,  0, num_cols_in_string(get_real_line_as_string(buffer, pos.line)));
-        sel.line = clamp(sel.line, 0, max_line);
-        sel.col  = clamp(sel.col,  0, num_cols_in_string(get_real_line_as_string(buffer, sel.line)));
-
-        cursor := *editor.cursors[cursor_id];
-        cursor.pos = real_coords_to_offset(buffer, pos);
-        cursor.sel = real_coords_to_offset(buffer, sel);
+    offset_difference: s32 = 0;
+    for edit : replace_edits {
+        range := edit.range;
+        range.start += offset_difference;
+        range.end   += offset_difference;
+        replace_range(buffer, range, edit.new_string);
+        offset_difference += cast(s32) edit.new_string.count - (range.end - range.start);
     }
+
+    restore_cursor_positions(buffer_id, cursor_positions);
+    refresh_all_editors_for_buffer(buffer_id);
+
+    buffer.indentation.type = .tabs;
+    // Not setting the size because tabs use defaults unless explicitly set
+}
+
+indentation_convert_to_spaces_for_buffer :: (buffer: *Buffer, buffer_id: s64) {
+    auto_release_temp();
+
+    tab_size := get_buffer_tab_size(buffer);
+
+    // Add an edit for each replaced line, to make sure cursors are adjusted properly everywhere
+    replace_edits: [..] Replace_Edit;
+    replace_edits.allocator = temp;
+
+    for line : split(to_string(buffer.bytes), cast(u8) #char "\n") {
+        indent, num_bytes := get_visual_indent_in_spaces(line, tab_size);
+        if !indent continue;
+
+        line_start := cast(s32) (line.data - buffer.bytes.data);
+        array_add(*replace_edits, Replace_Edit.{
+            range = .{ line_start , line_start + cast(s32) num_bytes },
+            new_string = get_tmp_spaces(indent),
+        });
+    }
+
+    // Apply the edits
+    cursor_positions := remember_cursor_positions(buffer_id, in = .active_editor);
+
+    offset_difference: s32 = 0;
+    for edit : replace_edits {
+        range := edit.range;
+        range.start += offset_difference;
+        range.end   += offset_difference;
+        replace_range(buffer, range, edit.new_string);
+        offset_difference += cast(s32) edit.new_string.count - (range.end - range.start);
+    }
+
+    restore_cursor_positions(buffer_id, cursor_positions);
+    refresh_all_editors_for_buffer(buffer_id);
+
+    buffer.indentation.type = .spaces;
+    buffer.indentation.size = cast(u8) config.settings.tab_size;
 }
 
 insert_final_newline :: (using buffer: *Buffer) {
@@ -1013,7 +1161,7 @@ find_or_create_buffer :: (path: string) -> buffer_id: s64, created: bool {
     } else if file_data.count > MAX_BUFFER_SIZE {
         load_error = sprint("Couldn't load file '%' because it exceeds the maximum buffer size of 2,147,483,647 bytes", path);
     } else if is_file_binary(file_data) {
-        load_error = sprint("Couldn't display file '%' because it's either binary or non-UTF8.", path);
+        load_error = sprint("Couldn't display file '%' because it's either binary or contains non-UTF8 characters.", path);
         buffer.binary = true;
     }
 
@@ -1050,17 +1198,142 @@ get_buffer_name :: (buffer: Buffer) -> string {
     //       So if we fail the `has_file` check, check the `file.full_path` as well to see if there is still a valid name that the buffer can draw.
     if buffer.has_file || buffer.file.full_path || buffer.readonly return buffer.file.name;
 
+    tab_size := get_buffer_tab_size(buffer);
+
     for 0..buffer.line_starts.count-2 {
         line := trim(get_real_line_as_string(buffer, xx it), "\t \r\n");
         name := copy_temporary_string(line);
         replace_chars(name, "\t", xx #char " ");  // remove tabs from the middle
-        if name return take_first_n_chars(name, min(50, name.count));
+        if name return take_first_n_chars(name, min(50, name.count), tab_size);
     }
 
     return "<new file>";
 }
 
-refresh_buffer_from_disk :: (path: string) {
+get_buffer_indentation_and_tab_size :: inline (using buffer: Buffer) -> Indentation, tab_size: s32 {
+    if indentation.size > 0 {
+        return indentation.type, ifx indentation.type == .spaces then indentation.size else cast(s32) config.settings.tab_size;
+    } else {
+        return config.settings.indent_using, cast(s32) config.settings.tab_size;
+    }
+}
+
+get_buffer_tab_size :: inline (using buffer: Buffer) -> s32 {
+    if indentation.size > 0 {
+        return ifx indentation.type == .spaces then indentation.size else cast(s32) config.settings.tab_size;
+    } else {
+        return cast(s32) config.settings.tab_size;
+    }
+}
+
+maybe_detect_and_set_indentation :: (buffer_id: s64) {
+    buffer := *open_buffers[buffer_id];
+    if buffer.readonly || buffer.deleted || buffer.internal return;
+
+    if config.settings.detect_indentation {
+        // With this setting on all buffers need to attempt to detect indentation unless already set
+        if buffer.indentation.size <= 0 && !buffer.indentation.was_manually_set then detect_and_set_indentation(buffer);
+    } else {
+        // With this setting off all buffers need to forget their indentation and use defaults, unless previously set manually
+        if !buffer.indentation.was_manually_set then buffer.indentation.size = 0;
+    }
+}
+
+detect_and_set_indentation :: (using buffer: *Buffer) -> enum { success; error; not_enough_data; } {
+    if is_empty(bytes) {
+        // Empty files get default indentation
+        indentation.type = config.settings.indent_using;
+        indentation.size = cast(u8) config.settings.tab_size;
+        return .not_enough_data;
+    }
+
+    // Collect stats on line indentaion
+    num_lines_with_spaces := 0;
+    num_lines_with_tabs   := 0;
+
+    MAX_INDENT :: 140;  // for the purpose of detecting indentation we don't look at lines indented more than this. Who would even do it?
+    line_differences:          [MAX_INDENT] s32;  // the numbers of differences between lines with different indents
+
+    last_indent     := 0;
+    last_difference := 0;
+
+    b    := bytes.data;
+    last := bytes.data + bytes.count - 1;
+    while b <= last {
+        num_spaces := 0;
+        num_tabs   := 0;
+        while b <= last {
+            if b.* == {
+                case #char " ";     num_spaces += 1;
+                case #char "\t";    num_tabs   += 1;
+                case;               break;  // end of indentation
+            }
+            b += 1;
+        }
+
+        if num_spaces > 0 && num_tabs > 0 {
+            // Mixed spaces and tabs on the same line, ignore
+        } else if num_tabs {
+            num_lines_with_tabs += 1;
+        } else if num_spaces > 0 && num_spaces < MAX_INDENT {
+            num_lines_with_spaces += 1;
+
+            difference_from_prev_line := abs(last_indent - num_spaces);
+            if difference_from_prev_line > 0 && difference_from_prev_line < MAX_INDENT {
+                line_differences[difference_from_prev_line] += 1;
+                last_difference = difference_from_prev_line;
+            } else if difference_from_prev_line == 0 && last_difference > 0 {
+                line_differences[last_difference] += 1;
+                // This is to count lines like this:
+                // int foo() {
+                //     foobar();  // <- diff = 4, remember
+                //     bazfoo();  // <- diff = 0, but count it towards the 4 still!
+                //     ...
+                //
+            }
+            last_indent = num_spaces;
+        }
+
+        // Skip the rest of the line
+        while b <= last && b.* != #char "\n"  b += 1;
+        b += 1;
+    }
+
+    if num_lines_with_tabs < 2 && num_lines_with_spaces < 2 {
+        // Not enough information, use defaults
+        indentation.type = config.settings.indent_using;
+        indentation.size = cast(u8) config.settings.tab_size;
+        return .not_enough_data;
+    }
+
+    if num_lines_with_tabs > num_lines_with_spaces {
+        // Assuming tabs
+        indentation.type = .tabs;
+        indentation.size = cast(u8) config.settings.tab_size;
+        return .success;
+    }
+
+    // Assuming spaces
+    indentation.type = .spaces;
+    indentation.size = cast(u8) config.settings.tab_size;  // fallback
+
+    // Find the most common line difference
+    max_lines := 0;
+    for num_lines, difference : line_differences {
+        if num_lines > max_lines {
+            indentation.size = cast(u8) difference;
+            max_lines = num_lines;
+        }
+    }
+
+    if indentation.size > 0 && indentation.size < MAX_INDENT {
+        return .success;
+    } else {
+        return .error;  // shouldn't happen
+    }
+}
+
+refresh_buffer_from_disk_by_path :: (path: string) {
     is_dir, is_dir_success := is_directory(path);
     if is_dir || !is_dir_success || !file_exists(path) {
         // Either this is a dir, or a deleted dir, or a deleted file.
@@ -1074,7 +1347,6 @@ refresh_buffer_from_disk :: (path: string) {
         if found_buffer {
             open_buffers[buffer_id].deleted = true;
             finder.need_to_refresh_results = true;
-            #if DEBUG_FILE_REFRESH log("File % doesn't exist", path);
         }
         unlock(*open_buffers_lock);
 
@@ -1087,17 +1359,13 @@ refresh_buffer_from_disk :: (path: string) {
     buffer_id, created := find_or_create_buffer(path);
     if created return;
     if buffer_id < 0 {
-        #if DEBUG_FILE_REFRESH log("ERROR: can't open file - path too long");
         log_error("Couldn't open file because path is too long for Windows: %\n", path);
         return;
     }
 
     buffer := *open_buffers[buffer_id];
 
-    if !buffer_file_has_changed_on_disk(buffer) {
-        #if DEBUG_FILE_REFRESH log("File % supposedly hasn't changed on disk", path);
-        return;
-    }
+    if !buffer_file_has_changed_on_disk(buffer) return;
 
     finder.need_to_refresh_results = true;
 
@@ -1108,11 +1376,11 @@ refresh_buffer_from_disk :: (path: string) {
     file_contents_str, success := read_entire_file(path);
     if is_file_binary(file_contents_str) {
         free(file_contents_str);
-        file_contents_str = sprint("Couldn't display file '%' because it's either binary or non-UTF8.", path);
+        file_contents_str = sprint("Couldn't display file '%' because it's either binary or contains non-UTF8 characters.", path);
         buffer.readonly = true;
     }
 
-    if !success { log_error("Couldn't read file '%'\n", path); #if DEBUG_FILE_REFRESH log("Couldn't read file"); return; }
+    if !success { log_error("Couldn't read file '%'\n", path); return; }
     defer free(file_contents_str);
 
     lock(*buffer.content_lock);
@@ -1120,10 +1388,7 @@ refresh_buffer_from_disk :: (path: string) {
     unlock(*buffer.content_lock);
 
     file_hash := calculate_hash(cast([] u8) file_contents_str);
-    if buffer.meow_hash == file_hash {
-        #if DEBUG_FILE_REFRESH log("Meow hash hasn't changed for %", path);
-        return;  // file hasn't actually changed
-    }
+    if buffer.meow_hash == file_hash  return;  // file hasn't actually changed
 
     buffer.crlf = bytes_removed > 0;
     buffer.meow_hash = file_hash;
@@ -1136,33 +1401,59 @@ refresh_buffer_from_disk :: (path: string) {
     } else {
         remember_last_mod_info(buffer);
 
-        // Remember cursor state - if we have 2 editors then the last editor's state will be remembered
-        for * editor : open_editors {
-            if editor.buffer_id != buffer_id continue;
+        cursor_positions := remember_cursor_positions(buffer_id, in = .all_editors);
 
-            new_edit_group(buffer, editor);
-            resize(*buffer.cursors, editor.cursors.count);
-            for * cursor, i : buffer.cursors { cursor.* = editor.cursors[i]; }
-        }
+        replace_range(buffer, .{ 0, buffer.bytes.count }, file_contents_str);
 
-        // Reload its contents
-        new_replace_edit (buffer, 0, buffer.bytes.count, to_string(buffer.bytes), file_contents_str);
-        replace_range_raw(buffer, 0, buffer.bytes.count, file_contents_str);
-        rescan_for_lines(buffer);
-        retokenize(buffer);
-
-        // Save edits and put cursors in correct places
-        for * editor : open_editors {
-            if editor.buffer_id != buffer_id continue;
-            new_edit_group(buffer, editor);
-            for * cursor : editor.cursors { put_cursor_in_valid_spot(cursor, buffer); }
-            organise_cursors(editor);
-            if editor.line_wrap == .on then rescan_for_wrapped_lines(editor, buffer);
-        }
+        restore_cursor_positions(buffer_id, cursor_positions);
     }
 
     refresh_all_editors_for_buffer(buffer_id);
-    #if DEBUG_FILE_REFRESH log("Refreshed %", path);
+}
+
+reload_from_disk :: (buffer_id: s64) {
+    // The difference between this function and `refresh_buffer_from_disk_by_path` is that
+    // this function is invoked by user and it will force reload and will produce user messages,
+    // whereas the other one is automatic and is silent
+
+    buffer := *open_buffers[buffer_id];
+    if !buffer.has_file || !buffer.file.full_path {
+        add_user_warning("Buffer has no associated file", dismiss_in_seconds = 5);
+        return;
+    }
+    path := buffer.file.full_path;
+
+    // Force reload buffer from disk, even if unchanged, and clear the flags
+    file_contents_str, success := read_entire_file(path);
+    if is_file_binary(file_contents_str) {
+        free(file_contents_str);
+        file_contents_str = sprint("Couldn't display file '%' because it's either binary or contains non-UTF8 characters.", path);
+        buffer.readonly = true;
+    }
+
+    if !success { add_user_error("Couldn't read file:\n%", path); return; }
+    defer free(file_contents_str);
+
+    bytes_removed := remove_crlf_in_place(*file_contents_str);
+
+    buffer.crlf = bytes_removed > 0;
+    buffer.meow_hash = calculate_hash(cast([] u8) file_contents_str);
+    buffer.deleted = false;
+    buffer.modified = false;  // if the user had unsaved changes and needs them again, undo should help
+
+    remember_last_mod_info(buffer);
+
+    cursor_positions := remember_cursor_positions(buffer_id, in = .all_editors);
+
+    replace_range(buffer, .{ 0, buffer.bytes.count }, file_contents_str);
+
+    restore_cursor_positions(buffer_id, cursor_positions);
+
+    refresh_all_editors_for_buffer(buffer_id);
+
+    add_success_message("File contents has been reloaded from\n%", path);
+
+    finder.need_to_refresh_results = true;
 }
 
 maybe_mark_buffer_as_deleted :: (path: string) {
@@ -1237,8 +1528,12 @@ get_range_as_string :: (buffer: Buffer, range: Offset_Range) -> string {
     return result;
 }
 
-init_buffer :: (buffer: *Buffer) {
-    init(*buffer.content_lock);
+init_buffer :: (using buffer: *Buffer) {
+    init(*content_lock);
+
+    // These values will be overwritten later if `detect_intentation` is true
+    indentation.type = config.settings.indent_using;
+    indentation.size = 0;
 }
 
 get_unsaved_buffer_ids :: () -> [] s64 /* temp */ {
@@ -1286,6 +1581,7 @@ get_tokenize_function :: (lang: Buffer.Lang) -> Tokenize_Function {
         case .Cpp;                  return tokenize_cpp;
         case .Css;                  return tokenize_css;
         case .CSharp;               return tokenize_csharp;
+        case .D;                    return tokenize_d;
         case .Glsl;                 return tokenize_glsl;
         case .Hlsl;                 return tokenize_hlsl;
         case .Golang;               return tokenize_golang;
@@ -1449,6 +1745,12 @@ Buffer :: struct {
 
     lang: Lang = .Plain_Text;
 
+    indentation: struct {
+        type: Indentation = .spaces;
+        size: u8 = 0;  // 0 means not initted, use global config values
+        was_manually_set := false;
+    }
+
     num_times_opened: u8;
     num_editors_open: u8;
 
@@ -1514,6 +1816,7 @@ Buffer :: struct {
         Cpp;
         Css;
         CSharp;
+        D;
         Glsl;
         Hlsl;
         Golang;

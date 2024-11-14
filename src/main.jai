@@ -371,6 +371,7 @@ handle_common_editor_action :: (action: Action_Editors, placement: Editor_Placem
         case .open_project;                                     print("UNIMPLEMENTED\n");  /* !!!!!!!!!!!! */       return true;
         case .switch_to_project;                                show_dialog(*switch_to_project_dialog);             return true;
         case .close_project;                                    close_project();                                    return true;
+        case .reload_workspace;                                 defer_action_reload_workspace(automatic = false);   return true;
 
         case .choose_theme;                                     show_dialog(*theme_dialog);                         return true;
         case .edit_current_theme;                               edit_current_theme(placement);                      return true;
@@ -404,7 +405,8 @@ handle_common_editor_action :: (action: Action_Editors, placement: Editor_Placem
         case .move_to_previous_buffer;                          move_to_previous_editor_history(by_buffer = true);  return true;
         case .move_to_next_buffer;                              move_to_next_editor_history    (by_buffer = true);  return true;
 
-        case .toggle_build_panel;                               toggle_build_panel();                               return true;
+        case .build_panel_toggle;                               build_panel_toggle();                               return true;
+        case .build_panel_toggle_focus;                         build_panel_toggle_focus();                         return true;
 
         case .build_kill_running_command;                       build_kill_running_command();                       return true;
         case .build_clear_output;                               build_clear_output();                               return true;
@@ -440,6 +442,9 @@ maybe_execute_a_build_command :: (action: Action_Build) -> handled: bool {
 
 init_fonts_and_dependent_things :: () {
     push_allocator(focus_allocator);  // we sometimes call this from within a temp allocator
+
+    Simp.set_anti_aliasing(config.style.font_anti_aliasing);
+    Simp.set_hinting(config.style.font_hinting);
 
     font_main_size = clamp(font_main_size, MIN_FONT_SIZE, MAX_FONT_SIZE);
     font_ui_size   = clamp(font_ui_size  , MIN_FONT_SIZE, MAX_FONT_SIZE);
@@ -810,8 +815,6 @@ REGEX_SEARCH_ICON   :: #run to_string(*convert_utf32_to_utf8(0xf621));
 BULLET_ICON         :: #run to_string(*convert_utf32_to_utf8(0x2022));
 XMARK_ICON          :: #run to_string(*convert_utf32_to_utf8(0xf057));
 
-TAB_SIZE: s32 = 4;
-
 font_main:             *Simp.Dynamic_Font;
 font_ui:               *Simp.Dynamic_Font;
 font_ui_bold:          *Simp.Dynamic_Font;
@@ -931,6 +934,7 @@ focus_allocator: Allocator;
 
 
 #load "array.jai";
+#load "actions.jai";
 #load "layout.jai";
 #load "editors.jai";
 #load "buffer.jai";
@@ -975,6 +979,7 @@ focus_allocator: Allocator;
 #load "langs/cpp.jai";
 #load "langs/css.jai";
 #load "langs/csharp.jai";
+#load "langs/d.jai";
 #load "langs/focus_config.jai";
 #load "langs/glsl.jai";
 #load "langs/hlsl.jai";

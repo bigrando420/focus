@@ -1,6 +1,6 @@
 // Increment this if your PR adds a setting, color or default keybinding (and amend the relevant array
 // in config_migrator.jai).  You don't need to increase it for each such change; once per PR is fine.
-CURRENT_CONFIG_VERSION :: 9;
+CURRENT_CONFIG_VERSION :: 13;
 
 load_global_config :: (fallback_to_default_on_failure := false, force := false) -> success: bool, changed: bool, there_were_warnings: bool {
     config_path := tprint("%/global.focus-config", config_dir);
@@ -179,6 +179,9 @@ refresh_config :: (path: string) {
         }
         add_success_message("File associations have been refreshed", dismiss_in_seconds = 3);
     }
+
+    // If indentation rules changed, refresh them for all open editors
+    for editor : open_editors  maybe_detect_and_set_indentation(editor.buffer_id);
 
     commands_refresh_after_config_change();
 
@@ -437,6 +440,8 @@ merge_configs :: (dst: *Config, parsed: Parsed_Config) {
 
     // Style
     if parsed.theme then dst.style.theme = copy_string(parsed.theme); /* @leak */  // TODO: rework how themes and styles are applied
+    if parsed.font_anti_aliasing.is_set then dst.style.font_anti_aliasing = parsed.font_anti_aliasing.value;
+    if parsed.font_hinting.is_set       then dst.style.font_hinting       = parsed.font_hinting.value;
     apply_style(parsed);
 
     // Platform config
@@ -445,17 +450,18 @@ merge_configs :: (dst: *Config, parsed: Parsed_Config) {
 
 apply_config :: () {
     // Make sure the values are within the acceptable range
-    old_tab_size := TAB_SIZE;
-    TAB_SIZE = clamp(cast(s32) config.settings.tab_size, 1, 100);  // be reasonable mkay (though even 100 is unreasonable)
-    if config.settings.tab_size != TAB_SIZE then add_user_warning("Tab size clamped to %", TAB_SIZE);
+    unclamped_tab_size := config.settings.tab_size;
+    config.settings.tab_size = clamp(cast(s32) unclamped_tab_size, 1, 100);  // be reasonable mkay (though even 100 is unreasonable)
+    if config.settings.tab_size != unclamped_tab_size then add_user_warning("Tab size clamped to %", config.settings.tab_size);
 
-    if old_tab_size != TAB_SIZE {
+    if old_tab_size != config.settings.tab_size {
         // Refresh all editors which have line wrap on
         for * editor : open_editors {
             buffer := *open_buffers[editor.buffer_id];
             if line_wrap_is_active(editor) then rescan_for_wrapped_lines(editor, buffer);
         }
     }
+    old_tab_size = config.settings.tab_size;
 
     clamp_and_warn :: (setting: *$T, min: T, max: T, message: string) {
         old := setting.*;
@@ -489,6 +495,9 @@ apply_config :: () {
     array_reset_keeping_memory(*active_hold_actions);  // NOTE: this doesn't actually stop the actions, it's just here so that we don't
                                                        //       keep pointers to old keymaps when the config is reloaded
 }
+
+old_tab_size := 0;  // used to detect when tab size is changed in the config
+
 
 load_font_by_name :: (name: string, kind: enum { main; ui; ui_bold; }) -> Loaded_Font, success: bool {
     if name == "default" {
@@ -540,7 +549,8 @@ Config :: struct {
 
 Style :: struct {
     theme: string;
-    // TODO: add other things in there at some point
+    font_anti_aliasing: Font_Anti_Aliasing = .lcd;
+    font_hinting := true;
 }
 
 Loaded_Font :: struct {
@@ -586,8 +596,6 @@ Settings :: struct {
     disable_file_open_close_animations                      := false;   @v1
     disable_viewport_chasing_cursor_near_the_edge           := false;   @v3
     double_shift_to_search_in_workspace                     := false;   @v1
-    tab_size                                                := 4;       @v1
-    insert_spaces_when_pressing_tab                         := true;    @v1
     strip_trailing_whitespace_on_save                       := Strip_Trailing_Whitespace.except_lines_with_cursor;  @v6
     insert_final_newline_on_save                            := false;   @v4
     smooth_scrolling                                        := true;    @v1
@@ -607,10 +615,8 @@ Settings :: struct {
     auto_surround_with_brackets_and_quotes                  := false;   @v2
     auto_close_brackets                                     := false;   @v1
     prefer_system_file_dialogs                              := false;   @v1
-    show_cursors_off_screen                                 := true;    @v1
     persist_local_search_results                            := false;   @v2
     search_is_case_sensitive_when_uppercase_present         := false;   @v6
-    show_selected_text_length                               := false;   @v3
     load_most_recent_project_on_start                       := false;   @v5
 
     build_panel_width_percent                               := 50;      @v2
@@ -621,37 +627,31 @@ Settings :: struct {
     save_current_buffer_on_build                            := false;   @v3
     save_all_file_backed_buffers_on_build                   := false;   @v3
 
-    status_bar_position                                     := Status_Bar_Position.bottom;                  @v4
     color_preview_popup                                     := Color_Preview_Popup.enabled;                 @v5
     projects_sorting_order                                  := Projects_Sorting_Order.most_recent_first;    @v6
 
+    detect_indentation                                      := true;                @v11
+    indent_using                                            := Indentation.spaces;  @v11
+    tab_size                                                := 4;                   @v1
+
+    status_bar_position                                     := Status_Bar_Position.bottom;                  @v4
+    status_bar_show_indentation                             := true;    @v11
+    status_bar_show_line_col                                := true;    @v11
+    status_bar_show_cursors_off_screen                      := true;    @v11
+    status_bar_show_selected_text_length                    := false;   @v3
+
     // TODO
-    // convert_tabs_to_spaces_on_load:     false
     // load_last_session_on_start:         true
 }
 
-Status_Bar_Position :: enum {
-    bottom;
-    top;
-}
+Indentation               :: enum { spaces; tabs; }
+Status_Bar_Position       :: enum { bottom; top; }
+Strip_Trailing_Whitespace :: enum { except_lines_with_cursor; all; disabled; }
+Color_Preview_Popup       :: enum { enabled; minimized; disabled; }
+Projects_Sorting_Order    :: enum { most_recent_first; alphabetical; alphabetical_no_case; }
 
-Strip_Trailing_Whitespace :: enum {
-    except_lines_with_cursor;
-    all;
-    disabled;
-}
-
-Color_Preview_Popup :: enum {
-    enabled;
-    minimized;
-    disabled;
-}
-
-Projects_Sorting_Order :: enum {
-    most_recent_first;
-    alphabetical;
-    alphabetical_no_case;
-}
+Font_Anti_Aliasing        :: enum { lcd; normal; }
+#poke_name Simp Font_Anti_Aliasing;
 
 Keymap :: struct {
     common:           [] Key_Mapping;

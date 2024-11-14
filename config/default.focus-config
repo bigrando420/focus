@@ -40,8 +40,6 @@ highlight_matching_brackets:                        false
 show_paste_effect:                                  true
 disable_file_open_close_animations:                 false
 double_shift_to_search_in_workspace:                false
-tab_size:                                           4
-insert_spaces_when_pressing_tab:                    true
 strip_trailing_whitespace_on_save:                  except_lines_with_cursor
 smooth_scrolling:                                   true
 scroll_beyond_last_line:                            true
@@ -53,7 +51,6 @@ editor_history_size:                                1024
 line_wrap_is_on_by_default:                         false
 show_line_numbers:                                  false
 show_ruler_at_column:                               0
-show_selected_text_length:                          false
 colored_titlebar:                                   true   # Windows 11+ only
 dark_titlebar:                                      false  # Windows only
 hide_mouse_when_typing:                             false
@@ -61,7 +58,6 @@ draw_indent_guides:                                 false
 auto_surround_with_brackets_and_quotes:             false
 auto_close_brackets:                                false
 prefer_system_file_dialogs:                         false  # Windows only
-show_cursors_off_screen:                            true
 persist_local_search_results:                       false  # if true, search results will stay highlighted and you have to dismiss them using the `escape` action
 load_most_recent_project_on_start:                  false
 projects_sorting_order:                             most_recent_first
@@ -74,13 +70,21 @@ build_panel_height_percent:                         50
 save_all_file_backed_buffers_on_build:              false
 save_current_buffer_on_build:                       false
 
-status_bar_position:                                bottom   # options: top, bottom
 color_preview_popup:                                enabled  # options: enabled, minimized, disabled
 search_is_case_sensitive_when_uppercase_present:    true
 
+detect_indentation:                                 true
+indent_using:                                       spaces
+tab_size:                                           4
+
+status_bar_position:                                bottom   # options: top, bottom
+status_bar_show_cursors_off_screen:                 true
+status_bar_show_line_col:                           true
+status_bar_show_indentation:                        true
+status_bar_show_selected_text_length:               false
 
 
-# This is an example configuration for build commands
+# This is an example configuration for build commands (uncomment and modify to use)
 
 # [[build commands]]
 # build_working_dir:      <build working dir for all commands>  # <- paths relative to the workspace working dir (the first one in the list) are allowed
@@ -145,10 +149,6 @@ Ctrl-Shift-D                duplicate_lines
 # These shortcuts can be annoying to accidentally use, so they are commented out by default
 # Shift-Backspace             delete_line_and_go_up
 # Shift-Delete                delete_line
-
-Ctrl-K                      delete_to_end_of_line
-Ctrl-Shift-Delete           delete_to_end_of_line
-Ctrl-Shift-Backspace        delete_to_start_of_line
 
 Alt-ArrowUp                 move_selected_lines_up
 Alt-ArrowDown               move_selected_lines_down
@@ -220,7 +220,6 @@ Ctrl-Shift-N                create_new_file_on_the_side
 Alt-Shift-ArrowUp           create_cursor_above
 Alt-Shift-ArrowDown         create_cursor_below
 
-Alt-Shift-ArrowRight        select_word_or_create_another_cursor
 Alt-A                       align_cursors
 
 Alt-Z                       toggle_line_wrap
@@ -254,6 +253,9 @@ Alt-C                       toggle_case_sensitive
 Alt-W                       toggle_whole_word
 Alt-R                       toggle_regex_search
 
+Tab                         go_to_next_input
+Shift-Tab                   go_to_previous_input
+
 
 [common]
 
@@ -286,6 +288,10 @@ Ctrl-Shift-Z                redo
 Ctrl-D                      select_word
 Ctrl-A                      select_all
 
+Ctrl-K                      cut_to_end_of_line
+Ctrl-Shift-Delete           delete_to_end_of_line
+Ctrl-Shift-Backspace        delete_to_start_of_line
+
 Ctrl-W                      close_current_editor
 Ctrl-Shift-W                close_other_editor
 
@@ -293,7 +299,7 @@ Escape                      escape  # combines close_dialog and remove_additiona
 
 Ctrl-Shift-L                toggle_expand
 
-Ctrl-B                      toggle_build_panel
+Ctrl-B                      build_panel_toggle
 
 F11                         toggle_fullscreen
 
@@ -308,12 +314,14 @@ F11                         toggle_fullscreen
 {Shift}-PageDown            move_down_one_page
 
 {Shift}-ArrowLeft           move_left
-{Shift}-Alt-ArrowLeft       move_left_by_word
-{Shift}-Ctrl-ArrowLeft      move_left_by_word_ends
+{Shift}-Alt-ArrowLeft       move_left_by_character_type
+{Shift}-Ctrl-ArrowLeft      move_left_through_word_throttled
+{Shift}-Meta-ArrowLeft      move_left_through_word
 
 {Shift}-ArrowRight          move_right
-{Shift}-Alt-ArrowRight      move_right_by_word
-{Shift}-Ctrl-ArrowRight     move_right_by_word_ends
+{Shift}-Alt-ArrowRight      move_right_by_character_type
+{Shift}-Ctrl-ArrowRight     move_right_through_word_throttled
+{Shift}-Meta-ArrowRight     move_right_through_word
 
 {Shift}-Home                jump_to_line_start
 {Shift}-End                 jump_to_line_end
@@ -323,10 +331,12 @@ F11                         toggle_fullscreen
 
 {Shift}-Backspace           delete_left_char
 {Shift}-Delete              delete_right_char
-{Shift}-Alt-Backspace       delete_word_left_no_underscore
-{Shift}-Alt-Delete          delete_word_right_no_underscore
-{Shift}-Ctrl-Backspace      delete_word_left
-{Shift}-Ctrl-Delete         delete_word_right
+{Shift}-Alt-Backspace       delete_left_by_character_type
+{Shift}-Alt-Delete          delete_right_by_character_type
+{Shift}-Ctrl-Backspace      delete_left_by_character_type_fast
+{Shift}-Ctrl-Delete         delete_right_by_character_type_fast
+{Shift}-Meta-Backspace      delete_left_through_word
+{Shift}-Meta-Delete         delete_right_through_word
 
 Ctrl-Plus                   increase_font_size
 Ctrl-Minus                  decrease_font_size
@@ -342,11 +352,13 @@ Shift-Ctrl-F8               go_to_previous_build_error_on_the_side
 [[style]]
 
 [fonts]
-font:         default
-font_ui:      default
-font_ui_bold: default
-font_size:    14
-font_ui_size: 15
+font:          default
+font_ui:       default
+font_ui_bold:  default
+font_size:     14
+font_ui_size:  15
+anti_aliasing: lcd  # options: lcd, normal
+hinting:       true
 
 [colors]
 background0:                            15212AFF

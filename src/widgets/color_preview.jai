@@ -241,6 +241,9 @@ color_preview_draw_color_picker :: (rect: Rect) {
     }
 
     offset += 1;
+
+    if offset >= buffer.bytes.count return;
+
     while is_unicode_space(buffer.bytes[offset]) {
         offset += 1;
         if offset >= buffer.bytes.count || buffer.bytes[offset] == #char "\n" return;
@@ -297,6 +300,7 @@ get_language_sample_text :: (lang: Buffer.Lang) -> string {
         case .Cpp;               return SAMPLE_Cpp;
         case .Css;               return SAMPLE_Css;
         case .CSharp;            return SAMPLE_CSharp;
+        case .D;                 return SAMPLE_D;
         case .Glsl;              return SAMPLE_Glsl;
         case .Hlsl;              return SAMPLE_Hlsl;
         case .Golang;            return SAMPLE_Golang;

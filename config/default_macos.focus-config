@@ -39,8 +39,6 @@ highlight_line_with_cursor:                         false
 highlight_matching_brackets:                        false
 show_paste_effect:                                  true
 disable_file_open_close_animations:                 false
-tab_size:                                           4
-insert_spaces_when_pressing_tab:                    true
 strip_trailing_whitespace_on_save:                  except_lines_with_cursor
 smooth_scrolling:                                   true
 scroll_beyond_last_line:                            true
@@ -53,12 +51,10 @@ editor_history_size:                                1024
 line_wrap_is_on_by_default:                         false
 show_line_numbers:                                  false
 show_ruler_at_column:                               0
-show_selected_text_length:                          false
 hide_mouse_when_typing:                             false
 draw_indent_guides:                                 false
 auto_surround_with_brackets_and_quotes:             false
 auto_close_brackets:                                false
-show_cursors_off_screen:                            true
 persist_local_search_results:                       false  # if true, search results will stay highlighted and you have to dismiss them using the `escape` action
 load_most_recent_project_on_start:                  false
 projects_sorting_order:                             most_recent_first
@@ -68,10 +64,21 @@ build_panel_line_wrap_always_on:                    true
 build_panel_width_percent:                          50
 build_panel_height_percent:                         50
 
-status_bar_position:                                bottom   # options: top, bottom
 color_preview_popup:                                enabled  # options: enabled, minimized, disabled
 search_is_case_sensitive_when_uppercase_present:    true
 
+detect_indentation:                                 true
+indent_using:                                       spaces
+tab_size:                                           4
+
+status_bar_position:                                bottom   # options: top, bottom
+status_bar_show_cursors_off_screen:                 true
+status_bar_show_line_col:                           true
+status_bar_show_indentation:                        true
+status_bar_show_selected_text_length:               false
+
+
+# This is an example configuration for build commands (uncomment and modify to use)
 
 # [[build commands]]
 # build_working_dir:      <build working dir for all commands>  # <- paths relative to the workspace working dir (the first one in the list) are allowed
@@ -130,10 +137,6 @@ Cmd-Shift-D                     duplicate_lines
 # These shortcuts can be annoying to accidentally use, so they are commented out by default
 # Shift-Backspace                 delete_line_and_go_up
 # Shift-Delete                    delete_line
-
-Cmd-K                           delete_to_end_of_line
-Cmd-Delete                      delete_to_end_of_line
-Cmd-Backspace                   delete_to_start_of_line
 
 Opt-ArrowUp                     move_selected_lines_up
 Opt-ArrowDown                   move_selected_lines_down
@@ -196,7 +199,6 @@ Cmd-Shift-N                     create_new_file_on_the_side
 Opt-Shift-ArrowUp               create_cursor_above
 Opt-Shift-ArrowDown             create_cursor_below
 
-Opt-Shift-ArrowRight            select_word_or_create_another_cursor
 Opt-Cmd-A                       align_cursors
 
 Opt-Cmd-Z                       toggle_line_wrap
@@ -231,6 +233,9 @@ Cmd-Opt-C                       toggle_case_sensitive
 Cmd-Opt-W                       toggle_whole_word
 Cmd-Opt-R                       toggle_regex_search
 
+Tab                             go_to_next_input
+Shift-Tab                       go_to_previous_input
+
 [common]
 
 # Common key combos may be used as a fallback if they are not defined in more specific sections.
@@ -261,6 +266,10 @@ Cmd-Shift-Z                     redo
 Cmd-D                           select_word
 Cmd-A                           select_all
 
+Cmd-K                           cut_to_end_of_line
+Cmd-Delete                      delete_to_end_of_line
+Cmd-Backspace                   delete_to_start_of_line
+
 Cmd-W                           close_current_editor
 Cmd-Shift-W                     close_other_editor
 
@@ -268,7 +277,7 @@ Escape                          escape  # combines close_dialog and remove_addit
 
 Cmd-Shift-L                     toggle_expand
 
-Cmd-B                           toggle_build_panel
+Cmd-B                           build_panel_toggle
 
 # Ctrl-Cmd-F will always toggle fullscreen on macOS (like most other apps), but you can uncomment this to use something else.
 # F11                             toggle_fullscreen
@@ -284,13 +293,15 @@ Cmd-B                           toggle_build_panel
 {Shift}-PageDown                move_down_one_page
 
 {Shift}-ArrowLeft               move_left
-{Shift}-Opt-ArrowLeft           move_left_by_word
-{Shift}-Opt-Cmd-ArrowLeft       move_left_by_word_ends
+{Shift}-Opt-ArrowLeft           move_left_by_character_type
+{Shift}-Opt-Cmd-ArrowLeft       move_left_through_word_throttled
+{Shift}-Ctrl-ArrowLeft          move_left_through_word
 {Shift}-Cmd-ArrowLeft           jump_to_line_start
 
 {Shift}-ArrowRight              move_right
-{Shift}-Opt-ArrowRight          move_right_by_word
-{Shift}-Opt-Cmd-ArrowRight      move_right_by_word_ends
+{Shift}-Opt-ArrowRight          move_right_by_character_type
+{Shift}-Opt-Cmd-ArrowRight      move_right_through_word_throttled
+{Shift}-Ctrl-ArrowRight         move_right_through_word
 {Shift}-Cmd-ArrowRight          jump_to_line_end
 
 {Shift}-Cmd-ArrowUp             jump_to_file_start
@@ -304,10 +315,12 @@ Cmd-B                           toggle_build_panel
 
 {Shift}-Backspace               delete_left_char
 {Shift}-Delete                  delete_right_char
-{Shift}-Opt-Backspace           delete_word_left_no_underscore
-{Shift}-Opt-Delete              delete_word_right_no_underscore
-{Shift}-Opt-Cmd-Backspace       delete_word_left
-{Shift}-Opt-Cmd-Delete          delete_word_right
+{Shift}-Opt-Backspace           delete_left_by_character_type
+{Shift}-Opt-Delete              delete_right_by_character_type
+{Shift}-Opt-Cmd-Backspace       delete_left_by_character_type_fast
+{Shift}-Opt-Cmd-Delete          delete_right_by_character_type_fast
+{Shift}-Ctrl-Backspace          delete_left_through_word
+{Shift}-Ctrl-Delete             delete_right_through_word
 
 Cmd-Plus                        increase_font_size
 Cmd-Minus                       decrease_font_size
@@ -323,11 +336,13 @@ Shift-Cmd-F8                    go_to_previous_build_error_on_the_side
 [[style]]
 
 [fonts]
-font:         default
-font_ui:      default
-font_ui_bold: default
-font_size:    14
-font_ui_size: 15
+font:          default
+font_ui:       default
+font_ui_bold:  default
+font_size:     14
+font_ui_size:  15
+anti_aliasing: lcd  # options: lcd, normal
+hinting:       true
 
 [colors]
 background0:                            15212AFF

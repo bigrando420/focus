@@ -93,8 +93,9 @@ maybe_migrate_config :: (name: string, file_data: string) -> migrated: bool, mod
                         key := tprint("%_%", current_subsection, action_name);
                         table_set(*config_info.keybinds_present, key, true);
                     }
-                    if current_subsection == "common"  then config_info.last_common_keybind_offset  = line_start_offset;
-                    if current_subsection == "editors" then config_info.last_editors_keybind_offset = line_start_offset;
+                    if current_subsection == "common"        then config_info.last_common_keybind_offset  = line_start_offset;
+                    if current_subsection == "editors"       then config_info.last_editors_keybind_offset = line_start_offset;
+                    if current_subsection == "search dialog" then config_info.last_search_keybind_offset  = line_start_offset;
             }
         }
     }
@@ -210,6 +211,7 @@ DONE
             if config_info.last_color_offset           >= workspace_section.end then config_info.last_color_offset           += bytes_delta;
             if config_info.last_common_keybind_offset  >= workspace_section.end then config_info.last_common_keybind_offset  += bytes_delta;
             if config_info.last_editors_keybind_offset >= workspace_section.end then config_info.last_editors_keybind_offset += bytes_delta;
+            if config_info.last_search_keybind_offset  >= workspace_section.end then config_info.last_search_keybind_offset  += bytes_delta;
         }
 
         // Insert new settings
@@ -239,6 +241,7 @@ DONE
             if config_info.last_color_offset           >= config_info.last_setting_offset then config_info.last_color_offset           += inserted_bytes;
             if config_info.last_common_keybind_offset  >= config_info.last_setting_offset then config_info.last_common_keybind_offset  += inserted_bytes;
             if config_info.last_editors_keybind_offset >= config_info.last_setting_offset then config_info.last_editors_keybind_offset += inserted_bytes;
+            if config_info.last_search_keybind_offset  >= config_info.last_setting_offset then config_info.last_search_keybind_offset  += inserted_bytes;
         }
 
         // Insert new colors
@@ -272,18 +275,19 @@ DONE
             // Adjust the offsets we remembered
             if config_info.last_common_keybind_offset  >= config_info.last_color_offset then config_info.last_common_keybind_offset  += inserted_bytes;
             if config_info.last_editors_keybind_offset >= config_info.last_color_offset then config_info.last_editors_keybind_offset += inserted_bytes;
+            if config_info.last_search_keybind_offset  >= config_info.last_color_offset then config_info.last_search_keybind_offset  += inserted_bytes;
         }
 
-        // Insert new keybinds into the editors section
-        if config_info.last_editors_keybind_offset >= 0 {
-            SUBSECTION :: "editors";
-            insert_offset := config_info.last_editors_keybind_offset + get_line_length(modified_data, config_info.last_editors_keybind_offset);
+        insert_new_keybinds :: (last_keybind_offset_for_subsection: int, subsection: string) #expand {
+            if last_keybind_offset_for_subsection <= 0 return;
+
+            insert_offset := last_keybind_offset_for_subsection + get_line_length(modified_data, last_keybind_offset_for_subsection);
             inserted_bytes := 0;
 
             // Maybe print a heading
             for added : ADDED_KEYBINDS {
-                if added.subsection != SUBSECTION continue;
-                if !table_contains(*config_info.keybinds_present, tprint("%_%", SUBSECTION, added.action)) && valid_version(added.version, config_info.version) {
+                if added.subsection != subsection continue;
+                if !table_contains(*config_info.keybinds_present, tprint("%_%", subsection, added.action)) && valid_version(added.version, config_info.version) {
                     heading := tprint("\n# Added after migration to version [%]\n", CURRENT_CONFIG_VERSION);
                     array_insert_bytes_at(*modified_data, insert_offset + inserted_bytes, cast([]u8) heading);
                     inserted_bytes += heading.count;
@@ -292,8 +296,8 @@ DONE
             }
 
             for added : ADDED_KEYBINDS {
-                if added.subsection != SUBSECTION continue;
-                if !table_contains(*config_info.keybinds_present, tprint("%_%", SUBSECTION, added.action)) && valid_version(added.version, config_info.version) {
+                if added.subsection != subsection continue;
+                if !table_contains(*config_info.keybinds_present, tprint("%_%", subsection, added.action)) && valid_version(added.version, config_info.version) {
                     key_combo := added.key_combo;
                     if OS == .MACOS then key_combo = added.key_combo_mac;
                     padding := get_tmp_spaces(KEYBINDS_INDENT - key_combo.count);
@@ -303,44 +307,19 @@ DONE
                 }
             }
 
-            // Adjust the offsets we remembered
-            if config_info.last_common_keybind_offset  >= config_info.last_editors_keybind_offset then config_info.last_common_keybind_offset  += inserted_bytes;
+            if config_info.last_common_keybind_offset  > last_keybind_offset_for_subsection then config_info.last_common_keybind_offset  += inserted_bytes;
+            if config_info.last_editors_keybind_offset > last_keybind_offset_for_subsection then config_info.last_editors_keybind_offset += inserted_bytes;
+            if config_info.last_search_keybind_offset  > last_keybind_offset_for_subsection then config_info.last_search_keybind_offset  += inserted_bytes;
         }
 
-        // Insert new keybinds into the common section
-        if config_info.last_common_keybind_offset >= 0 {
-            SUBSECTION :: "common";
-            insert_offset := config_info.last_common_keybind_offset + get_line_length(modified_data, config_info.last_common_keybind_offset);
-            inserted_bytes := 0;
-
-            // Maybe print a heading
-            for added : ADDED_KEYBINDS {
-                if added.subsection != SUBSECTION continue;
-                if !table_contains(*config_info.keybinds_present, tprint("%_%", SUBSECTION, added.action)) && valid_version(added.version, config_info.version) {
-                    heading := tprint("\n# Added after migration to version [%]\n", CURRENT_CONFIG_VERSION);
-                    array_insert_bytes_at(*modified_data, insert_offset + inserted_bytes, cast([]u8) heading);
-                    inserted_bytes += heading.count;
-                    break;
-                }
-            }
-
-            for added : ADDED_KEYBINDS {
-                if added.subsection != SUBSECTION continue;
-                if !table_contains(*config_info.keybinds_present, tprint("%_%", SUBSECTION, added.action)) && valid_version(added.version, config_info.version) {
-                    key_combo := added.key_combo;
-                    if OS == .MACOS then key_combo = added.key_combo_mac;
-                    padding := get_tmp_spaces(KEYBINDS_INDENT - key_combo.count);
-                    key_binding := tprint("%1%2%3\n", key_combo, padding, added.action);
-                    array_insert_bytes_at(*modified_data, insert_offset + inserted_bytes, cast([]u8) key_binding);
-                    inserted_bytes += key_binding.count;
-                }
-            }
-        }
+        insert_new_keybinds(config_info.last_editors_keybind_offset, "editors");
+        insert_new_keybinds(config_info.last_common_keybind_offset,  "common");
+        insert_new_keybinds(config_info.last_search_keybind_offset,  "search dialog");
 
         // Bump version from [whatever] to [current]
         assert(begins_with(cast(string) modified_data, tprint("[%]", config_info.version)));
-        new_version_number := tprint("[%]", CURRENT_CONFIG_VERSION);
-        focus_memcpy(modified_data.data, new_version_number.data, new_version_number.count);
+        new_version_line := tprint("[%]  # Version number. Do not delete.\n", CURRENT_CONFIG_VERSION);
+        replace_line(*modified_data, 0, new_version_line);
 
         current_section := assume_section;
         current_subsection: string;
@@ -435,8 +414,14 @@ DONE
                         }
                         for RENAMED_KEYBINDS {
                             if action_name == it.old_name && (!it.subsection || it.subsection == current_subsection) {
-                                action_offset := action_name.data - data_with_insertions.data + offset_difference;
-                                offset_difference += replace_line(*modified_data, action_offset, tprint("%\n", it.new_name));
+                                if it.new_name {
+                                    // Renamed
+                                    action_offset := action_name.data - data_with_insertions.data + offset_difference;
+                                    offset_difference += replace_line(*modified_data, action_offset, tprint("%\n", it.new_name));
+                                } else {
+                                    // Removed
+                                    offset_difference += replace_line(*modified_data, line_start_offset, "");
+                                }
                             }
                         }
                     }
@@ -470,41 +455,50 @@ get_line_length :: (buffer: [..] u8, line_start_offset: s64) -> length: s64 {
 }
 
 ADDED_SETTINGS :: Added_Setting.[
-    .{ 2, "build_panel_width_percent",                          "50" },
-    .{ 2, "build_panel_height_percent",                         "50" },
-    .{ 2, "build_panel_stays_in_one_place",                     "false  # if false, the build panel will flip to the inactive pane in two pane layouts" },
-    .{ 2, "build_panel_line_wrap_always_on",                    "true" },
-    .{ 2, "highlight_line_with_cursor",                         "false" },
-    .{ 2, "draw_indent_guides",                                 "false" },
-    .{ 2, "auto_surround_with_brackets_and_quotes",             "false" },
-    .{ 2, "scroll_beyond_last_line",                            "true" },
-    .{ 2, "show_cursors_off_screen",                            "true" },
-    .{ 2, "persist_local_search_results",                       "false  # if true, search results will stay highlighted and you have to dismiss them using the `escape` action" },
+    .{  2, "build_panel_width_percent",                          "50" },
+    .{  2, "build_panel_height_percent",                         "50" },
+    .{  2, "build_panel_stays_in_one_place",                     "false  # if false, the build panel will flip to the inactive pane in two pane layouts" },
+    .{  2, "build_panel_line_wrap_always_on",                    "true" },
+    .{  2, "highlight_line_with_cursor",                         "false" },
+    .{  2, "draw_indent_guides",                                 "false" },
+    .{  2, "auto_surround_with_brackets_and_quotes",             "false" },
+    .{  2, "scroll_beyond_last_line",                            "true" },
+    .{  2, "show_cursors_off_screen",                            "true" },
+    .{  2, "persist_local_search_results",                       "false  # if true, search results will stay highlighted and you have to dismiss them using the `escape` action" },
 
-    .{ 3, "save_current_buffer_on_build",                       "false" },
-    .{ 3, "save_all_file_backed_buffers_on_build",              "false" },
-    .{ 3, "disable_viewport_chasing_cursor_near_the_edge",      "false  # if true, the viewport will not scroll smoothly to cursor when you move the cursor outside it by small amounts" },
-    .{ 3, "show_selected_text_length",                          "false" },
+    .{  3, "save_current_buffer_on_build",                       "false" },
+    .{  3, "save_all_file_backed_buffers_on_build",              "false" },
+    .{  3, "disable_viewport_chasing_cursor_near_the_edge",      "false  # if true, the viewport will not scroll smoothly to cursor when you move the cursor outside it by small amounts" },
+    .{  3, "status_bar_show_selected_text_length",               "false" },
 
-    .{ 4, "window_width",                                       "-1" },
-    .{ 4, "window_height",                                      "-1" },
-    .{ 4, "insert_final_newline_on_save",                       "false" },
-    .{ 4, "status_bar_position",                                "bottom  # options: top, bottom" },
+    .{  4, "window_width",                                       "-1" },
+    .{  4, "window_height",                                      "-1" },
+    .{  4, "insert_final_newline_on_save",                       "false" },
+    .{  4, "status_bar_position",                                "bottom  # options: top, bottom" },
 
-    .{ 5, "load_most_recent_project_on_start",                  "false" },
-    .{ 5, "color_preview_popup",                                "enabled  # options: enabled, minimized, disabled" },
-    .{ 5, "highlight_matching_brackets",                        "false" },
+    .{  5, "load_most_recent_project_on_start",                  "false" },
+    .{  5, "color_preview_popup",                                "enabled  # options: enabled, minimized, disabled" },
+    .{  5, "highlight_matching_brackets",                        "false" },
 
-    .{ 6, "search_is_case_sensitive_when_uppercase_present",    "false" },
-    .{ 6, "projects_sorting_order",                             "most_recent_first  #options: most_recent_first, alphabetical, alphabetical_no_case" },
+    .{  6, "search_is_case_sensitive_when_uppercase_present",    "false" },
+    .{  6, "projects_sorting_order",                             "most_recent_first  #options: most_recent_first, alphabetical, alphabetical_no_case" },
 
-    .{ 7, "show_ruler_at_column",                               "0" },
+    .{  7, "show_ruler_at_column",                               "0" },
+
+    .{ 11, "detect_indentation",                                 "true  # if true, existing files will be scanned to detect indentation, new files will use the `indent_using` and `tab_size` settings" },
+    .{ 11, "status_bar_show_indentation",                        "true" },
+    .{ 11, "status_bar_show_line_col",                           "true" },
 ];
 
 RENAMED_SETTINGS :: Renamed_Setting.[
-    .{ 2, "max_entries_in_open_file_dialog", "", .[], "" },  // removed
-    .{ 6, "strip_trailing_whitespace_on_save", "strip_trailing_whitespace_on_save", .[.{"true", "except_lines_with_cursor"}, .{"false", "disabled"}], "options: all, except_lines_with_cursor, disabled"},
-    .{ 6, "disable_that_annoying_paste_effect", "show_paste_effect", .[.{"true", "false"}, .{"false", "true"}], ""},
+    .{  2, "max_entries_in_open_file_dialog", "", .[], "" },  // removed
+
+    .{  6, "strip_trailing_whitespace_on_save",   "strip_trailing_whitespace_on_save",    .[.{"true", "except_lines_with_cursor"}, .{"false", "disabled"}], "options: all, except_lines_with_cursor, disabled"},
+    .{  6, "disable_that_annoying_paste_effect",  "show_paste_effect",                    .[.{"true", "false"}, .{"false", "true"}], ""},
+
+    .{ 11, "insert_spaces_when_pressing_tab",     "indent_using",                         .[.{"true", "spaces"}, .{"false", "tabs"}], "options: spaces, tabs"},
+    .{ 11, "show_cursors_off_screen",             "status_bar_show_cursors_off_screen",   .[], ""},
+    .{ 11, "show_selected_text_length",           "status_bar_show_selected_text_length", .[], ""},
 ];
 
 SETTING_VALUES_INDENT :: #run -> int {
@@ -594,7 +588,7 @@ ADDED_KEYBINDS :: Added_Keybind.[
     .{ 2, "editors", "add_cursors_to_line_starts",                  "Alt-Shift-Ctrl-I",    "Alt-Shift-Ctrl-I" },
     .{ 2, "editors", "align_cursors",                               "Alt-A",               "Alt-Cmd-A"        },
     .{ 2, "editors", "select_all_occurrences",                      "Ctrl-Shift-A",        "Cmd-Shift-A"      },
-    .{ 2, "common",  "toggle_build_panel",                          "Ctrl-B",              "Cmd-B"            },
+    .{ 2, "common",  "build_panel_toggle",                          "Ctrl-B",              "Cmd-B"            },
     .{ 2, "common",  "toggle_fullscreen",                           "F11",                 "F11"              },
     .{ 2, "common",  "switch_between_open_files",                   "Ctrl-Tab",            "Ctrl-Tab"         },
 
@@ -610,6 +604,14 @@ ADDED_KEYBINDS :: Added_Keybind.[
 
     .{ 9, "editors", "revert_select_word_or_create_another_cursor",  "Ctrl-R",              "Cmd-R"    },
     .{ 9, "editors", "move_selection_to_next_word",                  "Ctrl-Y",              "Cmd-R"    },
+
+    .{ 10, "search dialog", "go_to_next_input",                      "Tab",                 "Tab"           },
+    .{ 10, "search dialog", "go_to_previous_input",                  "Shift-Tab",           "Shift-Tab"     },
+
+    .{ 12, "editors", "move_left_through_word",                      "{Shift}-Meta-ArrowLeft",  "{Shift}-Ctrl-ArrowLeft" },
+    .{ 12, "editors", "move_right_through_word",                     "{Shift}-Meta-ArrowRight", "{Shift}-Ctrl-ArrowRight" },
+    .{ 12, "editors", "delete_left_through_word",                    "{Shift}-Meta-Backspace",  "{Shift}-Ctrl-Backspace" },
+    .{ 12, "editors", "delete_right_through_word",                   "{Shift}-Meta-Delete",     "{Shift}-Ctrl-Delete" },
 ];
 
 RENAMED_KEYBINDS :: Renamed_Keybind.[
@@ -617,6 +619,19 @@ RENAMED_KEYBINDS :: Renamed_Keybind.[
     .{ 2, "",  "show_open_file_dialog_in_navigate_mode",            "navigate_to_file"           },
     .{ 2, "",  "show_open_file_dialog_in_navigate_mode_from_root",  "navigate_to_file_from_root" },
     .{ 2, "",  "show_open_file_dialog_in_open_editors_mode",        "switch_between_open_files"  },
+
+    .{ 11, "",         "do_nothing",                                ""  },  // removed
+
+    .{ 12, "common",   "move_left_by_word",                         "move_left_by_character_type"         },
+    .{ 12, "common",   "move_left_by_word_ends",                    "move_left_through_word_throttled"    },
+    .{ 12, "common",   "move_right_by_word",                        "move_right_by_character_type"        },
+    .{ 12, "common",   "move_right_by_word_ends",                   "move_right_through_word_throttled"   },
+    .{ 12, "common",   "delete_word_left_no_underscore",            "delete_left_by_character_type"       },
+    .{ 12, "common",   "delete_word_left",                          "delete_left_by_character_type_fast"  },
+    .{ 12, "common",   "delete_word_right_no_underscore",           "delete_right_by_character_type" },
+    .{ 12, "common",   "delete_word_right",                         "delete_right_by_character_type_fast" },
+
+    .{ 13, "common",   "toggle_build_panel",                        "build_panel_toggle" },
 ];
 
 #if !NO_OUTPUT_BUILD {
@@ -635,7 +650,9 @@ RENAMED_KEYBINDS :: Renamed_Keybind.[
         "decrease_font_size",
         "delete_left_char",
         "delete_right_char",
+        "cut_to_end_of_line",
         "delete_to_end_of_line",
+        "cut_to_start_of_line",
         "delete_to_start_of_line",
         "delete_word_left",
         "delete_word_left_no_underscore",
@@ -759,6 +776,7 @@ Config_Info :: struct {
     last_color_offset   := -1;
     last_common_keybind_offset  := -1;
     last_editors_keybind_offset := -1;
+    last_search_keybind_offset  := -1;
 
     workspace_v5_rewrite: Workspace_V5_Rewrite_Info;  // only for migration to version [5]
 };
@@ -838,10 +856,10 @@ MIGRATE_BUILTIN_THEMES :: !NO_OUTPUT_BUILD && !DEBUG;
     run_test("Сolors from [2]",               "global.focus-config",  COLORS_2,                 COLORS_2_EXPECTED);
     run_test("Colors and settings from [1]",  "global.focus-config",  COLORS_AND_SETTINGS_1,    COLORS_AND_SETTINGS_1_EXPECTED);
     run_test("Keybinds from [1]",             "global.focus-config",  KEYBINDS_1,               KEYBINDS_1_EXPECTED);
-    run_test("Keybinds from [2]",             "global.focus-config",  KEYBINDS_2,               KEYBINDS_2_EXPECTED);
     run_test("Theme from [1]",                "nord.focus-theme",     THEME_1,                  THEME_1_EXPECTED);
     run_test("Theme from [3]",                "handmade.focus-theme", THEME_3,                  THEME_3_EXPECTED);
     // NOTE: commented out because the compiler crashes when trying to execute it together with other tests. Works fine otherwise
+    // run_test("Keybinds from [2]",             "global.focus-config",  KEYBINDS_2,               KEYBINDS_2_EXPECTED);
     // run_test("Workspace migration from [4]",  "global.focus-config",  WORKSPACE_4,              WORKSPACE_4_EXPECTED);
 
     print("All unit tests passed!\n");
@@ -875,7 +893,7 @@ simple_diff :: (main_header: string, header1: string, data1: string, header2: st
     line_number := 1;
     line_start := 0;
     prev_line_start := 0;
-    max_output_chars :: 160;
+    max_output_chars :: 360;
     for i : 0 .. data1.count - 1 {
         if i >= data2.count {
             print("% continues after % runs out:\nLine number: %\n%\n",
@@ -1077,6 +1095,9 @@ WORKSPACE_4_EXPECTED :: #string FOCUS_CONFIG
 [common]
 Ctrl-P                      open_file_by_name
 
+# Added after migration to version [!latest!]
+{Shift}-Ctrl-M              jump_to_matching_bracket
+
 
 [[workspace]]
 # These directories and files will be scanned when a workspace is opened so that search etc. works.
@@ -1160,7 +1181,7 @@ SETTINGS_1_EXPECTED :: #string FOCUS_CONFIG
 Ctrl-P                      open_file_by_name
 
 # Added after migration to version [!latest!]
-Ctrl-B                      toggle_build_panel
+Ctrl-B                      build_panel_toggle
 F11                         toggle_fullscreen
 Ctrl-Tab                    switch_between_open_files
 Ctrl-Shift-Alt-N            open_another_editor_instance
@@ -1176,9 +1197,9 @@ maximize_on_start:                      false
 show_paste_effect:                      true
 tab_size:                               4
 build_panel_width_percent:              50
-insert_spaces_when_pressing_tab:        true
+indent_using:                           spaces  # options: spaces, tabs
 prefer_system_file_dialogs:             false  # Windows only
-show_cursors_off_screen:                true
+status_bar_show_cursors_off_screen:     true
 persist_local_search_results:           false
 strip_trailing_whitespace_on_save:      except_lines_with_cursor  # options: all, except_lines_with_cursor, disabled
 
@@ -1193,7 +1214,7 @@ scroll_beyond_last_line:                         true
 save_current_buffer_on_build:                    false
 save_all_file_backed_buffers_on_build:           false
 disable_viewport_chasing_cursor_near_the_edge:   false  # if true, the viewport will not scroll smoothly to cursor when you move the cursor outside it by small amounts
-show_selected_text_length:                       false
+status_bar_show_selected_text_length:            false
 window_width:                                    -1
 window_height:                                   -1
 insert_final_newline_on_save:                    false
@@ -1204,6 +1225,9 @@ highlight_matching_brackets:                     false
 search_is_case_sensitive_when_uppercase_present: false
 projects_sorting_order:                          most_recent_first  #options: most_recent_first, alphabetical, alphabetical_no_case
 show_ruler_at_column:                            0
+detect_indentation:                              true  # if true, existing files will be scanned to detect indentation, new files will use the `indent_using` and `tab_size` settings
+status_bar_show_indentation:                     true
+status_bar_show_line_col:                        true
 
 FOCUS_CONFIG
 
@@ -1221,7 +1245,7 @@ SETTINGS_2 :: #string FOCUS_CONFIG
 Ctrl-P                      open_file_by_name
 
 # Added after migration to version [2]
-Ctrl-B                      toggle_build_panel
+Ctrl-B                      build_panel_toggle
 F11                         toggle_fullscreen
 Ctrl-Tab                    switch_between_open_files
 
@@ -1263,7 +1287,7 @@ SETTINGS_2_EXPECTED :: #string FOCUS_CONFIG
 Ctrl-P                      open_file_by_name
 
 # Added after migration to version [2]
-Ctrl-B                      toggle_build_panel
+Ctrl-B                      build_panel_toggle
 F11                         toggle_fullscreen
 Ctrl-Tab                    switch_between_open_files
 
@@ -1280,9 +1304,9 @@ Shift-Ctrl-F8               go_to_previous_build_error_on_the_side
 maximize_on_start:                      false
 tab_size:                               4
 build_panel_width_percent:              50
-insert_spaces_when_pressing_tab:        true
+indent_using:                           spaces  # options: spaces, tabs
 prefer_system_file_dialogs:             false  # Windows only
-show_cursors_off_screen:                true
+status_bar_show_cursors_off_screen:     true
 persist_local_search_results:           false
 show_paste_effect:                      false
 strip_trailing_whitespace_on_save:      disabled  # options: all, except_lines_with_cursor, disabled
@@ -1297,7 +1321,7 @@ scroll_beyond_last_line:                true
 save_current_buffer_on_build:                    false
 save_all_file_backed_buffers_on_build:           false
 disable_viewport_chasing_cursor_near_the_edge:   false  # if true, the viewport will not scroll smoothly to cursor when you move the cursor outside it by small amounts
-show_selected_text_length:                       false
+status_bar_show_selected_text_length:            false
 window_width:                                    -1
 window_height:                                   -1
 insert_final_newline_on_save:                    false
@@ -1308,6 +1332,9 @@ highlight_matching_brackets:                     false
 search_is_case_sensitive_when_uppercase_present: false
 projects_sorting_order:                          most_recent_first  #options: most_recent_first, alphabetical, alphabetical_no_case
 show_ruler_at_column:                            0
+detect_indentation:                              true  # if true, existing files will be scanned to detect indentation, new files will use the `indent_using` and `tab_size` settings
+status_bar_show_indentation:                     true
+status_bar_show_line_col:                        true
 
 FOCUS_CONFIG
 
@@ -1351,7 +1378,7 @@ PROJECT_SETTINGS_1_EXPECTED :: #string FOCUS_CONFIG
 Ctrl-P                      open_file_by_name
 
 # Added after migration to version [!latest!]
-Ctrl-B                      toggle_build_panel
+Ctrl-B                      build_panel_toggle
 F11                         toggle_fullscreen
 Ctrl-Tab                    switch_between_open_files
 Ctrl-Shift-Alt-N            open_another_editor_instance
@@ -1366,9 +1393,9 @@ Shift-Ctrl-F8               go_to_previous_build_error_on_the_side
 maximize_on_start:                      false
 tab_size:                               4
 build_panel_width_percent:              50
-insert_spaces_when_pressing_tab:        true
+indent_using:                           spaces  # options: spaces, tabs
 prefer_system_file_dialogs:             false  # Windows only
-show_cursors_off_screen:                true
+status_bar_show_cursors_off_screen:     true
 persist_local_search_results:           false
 
 FOCUS_CONFIG
@@ -1399,7 +1426,7 @@ selection_highlight:                    FF000026
 FOCUS_CONFIG
 
 COLORS_1_EXPECTED :: #string FOCUS_CONFIG
-[!latest!]   # Version number. Do not delete.
+[!latest!]  # Version number. Do not delete.
 
 [[style]]
 
@@ -1485,7 +1512,7 @@ scrollbar_background:                   FF191F4C
 FOCUS_CONFIG
 
 COLORS_2_EXPECTED :: #string FOCUS_CONFIG
-[!latest!]   # Version number. Do not delete.
+[!latest!]  # Version number. Do not delete.
 
 [[style]]
 
@@ -1578,7 +1605,7 @@ scrollbar_background:                   FF191F4C
 FOCUS_CONFIG
 
 COLORS_AND_SETTINGS_1_EXPECTED :: #string FOCUS_CONFIG
-[!latest!]   # Version number. Do not delete.
+[!latest!]  # Version number. Do not delete.
 
 [[workspace]]
 # These directories and files will be scanned when a workspace is opened so that search etc. works.
@@ -1595,9 +1622,9 @@ COLORS_AND_SETTINGS_1_EXPECTED :: #string FOCUS_CONFIG
 maximize_on_start:                      false
 tab_size:                               4
 build_panel_width_percent:              50
-insert_spaces_when_pressing_tab:        true
+indent_using:                           spaces  # options: spaces, tabs
 prefer_system_file_dialogs:             false  # Windows only
-show_cursors_off_screen:                true
+status_bar_show_cursors_off_screen:     true
 
 # Added after migration to version [!latest!]
 build_panel_height_percent:                      50
@@ -1611,7 +1638,7 @@ persist_local_search_results:                    false  # if true, search result
 save_current_buffer_on_build:                    false
 save_all_file_backed_buffers_on_build:           false
 disable_viewport_chasing_cursor_near_the_edge:   false  # if true, the viewport will not scroll smoothly to cursor when you move the cursor outside it by small amounts
-show_selected_text_length:                       false
+status_bar_show_selected_text_length:            false
 window_width:                                    -1
 window_height:                                   -1
 insert_final_newline_on_save:                    false
@@ -1622,6 +1649,9 @@ highlight_matching_brackets:                     false
 search_is_case_sensitive_when_uppercase_present: false
 projects_sorting_order:                          most_recent_first  #options: most_recent_first, alphabetical, alphabetical_no_case
 show_ruler_at_column:                            0
+detect_indentation:                              true  # if true, existing files will be scanned to detect indentation, new files will use the `indent_using` and `tab_size` settings
+status_bar_show_indentation:                     true
+status_bar_show_line_col:                        true
 
 [[keymap]]
 # ...
@@ -1715,6 +1745,7 @@ scrollbar_background:                   FF191F4C
 Alt-F4                      quit
 Escape                      remove_additional_cursors
 Ctrl-Escape                 remove_additional_cursors
+Alt-F1                      do_nothing
 
 Ctrl-D                      select_word_or_create_another_cursor
 Ctrl-Shift-A                select_all_occurrences
@@ -1816,6 +1847,10 @@ Alt-A                       align_cursors
 Ctrl-U                      change_case_cycle
 Ctrl-R                      revert_select_word_or_create_another_cursor
 Ctrl-Y                      move_selection_to_next_word
+{Shift}-Meta-ArrowLeft      move_left_through_word
+{Shift}-Meta-ArrowRight     move_right_through_word
+{Shift}-Meta-Backspace      delete_left_through_word
+{Shift}-Meta-Delete         delete_right_through_word
 
 [open file dialog]
 Tab                         open_directory
@@ -1832,7 +1867,7 @@ Ctrl-Tab                    switch_between_open_files
 Ctrl-Alt-P                  switch_to_project
 
 # Added after migration to version [!latest!]
-Ctrl-B                      toggle_build_panel
+Ctrl-B                      build_panel_toggle
 F11                         toggle_fullscreen
 Ctrl-Tab                    switch_between_open_files
 Ctrl-Shift-Alt-N            open_another_editor_instance
@@ -1865,15 +1900,15 @@ Ctrl-Shift-A                select_all_occurrences
 Tab                         open_directory
 
 [common]
-Alt-X                       show_commands
-Ctrl-Shift-P                show_commands
-
 Ctrl-P                      show_open_file_dialog_in_search_mode
 Ctrl-O                      show_open_file_dialog_in_navigate_mode
 Ctrl-Shift-O                show_open_file_dialog_in_navigate_mode_from_root
 Ctrl-Tab                    show_open_file_dialog_in_open_editors_mode
 
 Ctrl-Alt-P                  switch_to_project
+
+[search dialog]
+Enter                       open_entry_in_place
 
 FOCUS_CONFIG
 
@@ -1902,9 +1937,6 @@ Ctrl-Y                      move_selection_to_next_word
 Tab                         open_directory
 
 [common]
-Alt-X                       show_commands
-Ctrl-Shift-P                show_commands
-
 Ctrl-P                      open_file_by_name
 Ctrl-O                      navigate_to_file
 Ctrl-Shift-O                navigate_to_file_from_root
@@ -1919,6 +1951,13 @@ Ctrl-F8                     go_to_next_build_error_on_the_side
 Shift-F8                    go_to_previous_build_error
 Shift-Ctrl-F8               go_to_previous_build_error_on_the_side
 {Shift}-Ctrl-M              jump_to_matching_bracket
+
+[search dialog]
+Enter                       open_entry_in_place
+
+# Added after migration to version [!latest!]
+Tab                         go_to_next_input
+Shift-Tab                   go_to_previous_input
 
 FOCUS_CONFIG
 
@@ -1944,7 +1983,7 @@ scrollbar_background:                   FF191F4C
 FOCUS_CONFIG
 
 THEME_1_EXPECTED :: #string FOCUS_CONFIG
-[!latest!]   # Version number. Do not delete.
+[!latest!]  # Version number. Do not delete.
 
 [fonts]
 font:       default
@@ -2076,7 +2115,7 @@ build_panel_title_bar:                  121212FF
 FOCUS_CONFIG
 
 THEME_3_EXPECTED :: #string FOCUS_CONFIG
-[!latest!]  # Version number. Do not delete
+[!latest!]  # Version number. Do not delete.
 
 [colors]
 
@@ -2172,4 +2211,3 @@ bracket_highlight:                      FCEDFC26
 indent_guide:                           FCEDFC26
 
 FOCUS_CONFIG
-
