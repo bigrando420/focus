@@ -191,7 +191,7 @@ active_editor_handle_event :: (editor: *Editor, buffer: *Buffer, event: Input.Ev
         case .save_as;                          defer_action_save_as(editor.buffer_id);
         case .move_current_file;                defer_action_move   (editor.buffer_id);
         case .delete_current_file;              defer_action_delete (editor.buffer_id);
-        case .reload_from_disk;                 reload_from_disk    (editor.buffer_id);
+        case .reload_from_disk;                 user_reload_from_disk(editor.buffer_id);
 
         case .switch_to_left_editor;            switch_to_editor(.left);
         case .switch_to_right_editor;           switch_to_editor(.right);
@@ -390,8 +390,9 @@ active_editor_type_char :: (char: u32) {
     offset_delta: s32 = 0;
     buf_len := cast(s32) buffer.bytes.count;
 
-    should_surround_selection     := config.settings.auto_surround_with_brackets_and_quotes && all_cursors_have_selection(editor) && is_balanceable_char(char);
-    should_insert_closing_bracket := config.settings.auto_close_brackets && all_cursors_can_auto_insert_closing_bracket(editor, buffer) && is_auto_closeable_char(char);
+    buffer_settings := get_settings(buffer);
+    should_surround_selection     := buffer_settings.auto_surround_with_brackets_and_quotes && all_cursors_have_selection(editor) && is_balanceable_char(char);
+    should_insert_closing_bracket := buffer_settings.auto_close_brackets && all_cursors_can_auto_insert_closing_bracket(editor, buffer) && is_auto_closeable_char(char);
 
     for * cursor : editor.cursors {
         new_len := cast(s32) buffer.bytes.count;
@@ -1243,7 +1244,6 @@ init_buffers :: () {
     // 3000 * 70% = 2100 is a reasonable number of text files in a workspace, which
     // most codebases will hopefully not exceed (so that we don't have to grow the hash table)
     init(*buffers_table, slots_to_allocate = 3000);
-
     init(*open_buffers_lock);
 
     global_config_buffer_id = -1;
@@ -1264,7 +1264,7 @@ get_lang_from_path :: (full_path: string) -> Buffer.Lang {
 
     // Try to get lang from the user-provided mapping first
     for config.workspace.file_associations {
-        if wildcard_match(basename_with_extension, it.wildcard) return it.lang;
+        if path_wildcard_match(basename_with_extension, it.wildcard) return it.lang;
     }
 
     // Get lang from the builtin mapping
@@ -1373,13 +1373,13 @@ cursors_start_blinking :: inline () {
     if config.settings.cursor_blink_time_in_seconds <= 0 return;
 
     cursor_blink_start = frame_time;
-    platform_set_refresh_timer(window);
+    platform_set_cursor_timer(window);
     cursors_blinking = true;
 }
 
 cursors_stop_blinking :: inline () {
     cursors_blinking = false;
-    platform_kill_refresh_timer(window);
+    platform_kill_cursor_timer(window);
 }
 
 should_draw_cursors :: inline () -> bool {
@@ -1431,12 +1431,13 @@ make_editor_active :: (editor_id: s64) {
     editors.active = editor_id;
 
     buffer_id := open_editors[editor_id].buffer_id;
+    buffer := *open_buffers[buffer_id];
     update_window_title(buffer_id);
 
     array_ordered_remove_by_value(*most_recent_buffers, buffer_id);
     array_insert_at(*most_recent_buffers, buffer_id, 0);
 
-    maybe_detect_and_set_indentation(buffer_id);
+    maybe_detect_and_set_indentation(buffer);
 }
 
 update_window_title :: (buffer_id: s64 = -1) {
@@ -1472,13 +1473,15 @@ find_or_create_editor :: (buffer_id: s64, unwanted_existing_editor: s64 = -1) ->
     editor.buffer_id = buffer_id;
     add(*editor.cursors, Cursor.{});
 
-    if config.settings.line_wrap_is_on_by_default {
+    buffer := *open_buffers[buffer_id];
+
+    buffer.num_editors_open += 1;
+    assert(buffer.num_editors_open <= 2);
+
+    if get_settings(buffer).line_wrap_is_on_by_default {
         editor.line_wrap = .to_enable;
         redraw_requested = true;
     }
-
-    open_buffers[buffer_id].num_editors_open += 1;
-    assert(open_buffers[buffer_id].num_editors_open <= 2);
 
     return editor_id, true;
 }
@@ -1915,7 +1918,10 @@ save :: (buffer_id: s64) {
     buffer := *open_buffers[buffer_id];
     if buffer.readonly || buffer.internal return;
 
-    if buffer.has_file {
+    if buffer.modified_on_disk {
+        // Don't save without showing a confirmation dialog
+        defer_action_overwrite_buffer(buffer_id);
+    } else if buffer.has_file {
         save_buffer(buffer, buffer_id);
     } else {
         defer_action_save_as(buffer_id);
@@ -1977,6 +1983,7 @@ switch_to_editor :: (side: enum { left; right; other; }, duplicate_current := fa
 duplicate_active_editor :: () -> s64 {
     current_editor       := *open_editors[editors.active];
     duplicated_editor_id := find_or_create_editor(current_editor.buffer_id, editors.active);
+    current_editor        = *open_editors[editors.active];  // take the pointer again because it could've become invalid
     duplicated_editor    := *open_editors[duplicated_editor_id];
 
     // Duplicate cursors
@@ -3771,8 +3778,18 @@ toggle_line_wrap :: (editor: *Editor) {
 }
 
 toggle_line_numbers :: () {
-    config.settings.show_line_numbers = !config.settings.show_line_numbers;
     redraw_requested = true;
+
+    _, buffer := get_active_editor_and_buffer();
+    if buffer {
+        buffer_settings := get_settings(buffer);
+        if buffer_settings != *config.settings {
+            buffer_settings.show_line_numbers = !buffer_settings.show_line_numbers;
+            return;
+        }
+    }
+
+    config.settings.show_line_numbers = !config.settings.show_line_numbers;
 }
 
 copy_current_line_info :: (using editor: *Editor, buffer: Buffer) {

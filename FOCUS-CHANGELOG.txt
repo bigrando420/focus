@@ -6,6 +6,7 @@
         + Batch (thanks @arjenwitteveen)
         + D (thanks @dawsonfrakes)
         + JS embedded in HTML <script> tags will now be highlighted (@thanks @simonvallz)
+        + Jai 0.1.96+
     + It is now possible to pass a line number together with the file path to the editor on startup: `focus /path/to/file:69` (thanks @simonvallz)
     + New actions to change case of selected text (thanks @onelivesleft):
         + `change_case_to_upper`
@@ -55,11 +56,21 @@
             + To convert indentation from spaces to tabs and vice versa - this will change the file contents itself! Note that any tabs or spaces within the lines are not touched
             + To revert indentation to defaults as specified in the config
         + When tab indentation is used, the `tab_size` from the config is always used
+    + File-specific settings are now supported:
+        + Some settings can be specified for a subset of files, based on their language or a wildcard, for example:
+            + `[file: <wildcard1>, <wildcard2>, ...]`
+            + `[lang: golang, cpp, c, ...]`
 + Bug fixes:
     + Fixed a crash when changing languages in the color preview widget
     + Fixed a crash when editing colors near the end of file with color preview open (thanks @darkgiggs)
+    + Fixed a crash when trying to jump to build error after reloading workspace
+    + Fixed a crash when trying to duplicate an editor in some cases
+    + Fixed a crash when printing too much into the build output window
     + Fixed font size changing when you press ctrl after scrolling has started (thanks @onelivesleft)
     + Cursors in all editors should now be preserved after stripping trailing whitespace. Undo/redo behaviour is fixed as well.
+    + Current line highlights will no longer cover indent guides and text highlights
+    + Fixed double save dialogs which could appear in some cases
+    + Fixed a memory leak in the build system
 + Other changes:
     + Syntax highlighting improvements for CSS and TypeScript (thanks @simonvallz)
     + Creating cursors above and below will now skip empty lines as this is most likely the behaviour users want (thanks @onelivesleft)
@@ -68,6 +79,13 @@
     + The `delete_to_{start,end}_of_line` actions no longer copies the text to the clipboard.
         + Added two new actions `cut_to_{start,end}_of_line` that deletes the text and copies it to the clipboard.
     + When choosing a location to save a file, the option to "save as" in the dialog will appear after the directories but before files (previously it was at the bottom), so that it's still easy to navigate directories, but also the most likely needed option of saving as a new file is at the top.
+    + When attempting to save a buffer which is modified on disk, a confirmation dialog will be shown
+    + When a file gets deleted but is then created again (e.g. when switching branches in source control), the editor will notice that and "undelete" the buffer
+    + The Navigate To File dialog will now show whether a file is modified and/or modified on disk
+    + The editor will now refresh at regular intervals, so that it shows any changes happened externally without waiting for user input
+    + The Basic Light theme has been improved (thanks @maxamundsen)
+    + macOS: the `dark_titlebar` and `colored_titlebar` settings are now respected (thanks @maxamundsen)
+    + Made horizontal scrolling with a horizontal mouse wheel more smooth
 
 
 # RELEASES ==================================================================

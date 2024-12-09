@@ -24,6 +24,7 @@ refresh_open_buffers :: () {
         if !buffer.modified then buffer.modified_on_disk = false;  // we've verified that the contents matches that on disk
 
         finder.need_to_refresh_results = true;
+        open_file_dialog.should_refresh_entries = true;
     }
 }
 
@@ -686,7 +687,7 @@ find_matching_bracket :: (using buffer: Buffer, pos: s32) -> index: s32 {
 
     balance := 0;
     if direction < 0 {
-        for < i : pos .. 0 {
+        for #v2 < i : 0 .. pos {
             if tokens[i] != .punctuation continue;
 
             byte := bytes[i];
@@ -735,6 +736,7 @@ save_buffer_to_file :: (buffer: *Buffer, buffer_id: s64, file_path: string) {
         buffer.has_file = true;
         buffer.file = get_file_info_from_full_path(file_path);
         buffer.lang = get_lang_from_path(file_path);
+        recalculate_settings(buffer);
         buffer.needs_tokenizing = true;
 
         lock(*open_buffers_lock);
@@ -787,10 +789,12 @@ save_buffer :: (using buffer: *Buffer, buffer_id: s64) {
 
     assert(has_file, "Trying to save a buffer without an associated file. This is a bug.");
 
-    if config.settings.strip_trailing_whitespace_on_save != .disabled {
-        strip_trailing_whitespace(buffer, buffer_id, except_lines_with_cursor = config.settings.strip_trailing_whitespace_on_save == .except_lines_with_cursor);
+    buffer_settings := get_settings(buffer);
+
+    if buffer_settings.strip_trailing_whitespace_on_save != .disabled {
+        strip_trailing_whitespace(buffer, buffer_id, except_lines_with_cursor = buffer_settings.strip_trailing_whitespace_on_save == .except_lines_with_cursor);
     }
-    if config.settings.insert_final_newline_on_save      then insert_final_newline(buffer);  // important to do it after stripping
+    if buffer_settings.insert_final_newline_on_save then insert_final_newline(buffer);  // important to do it after stripping
 
     success := write_entire_file(file.full_path, to_string(bytes));
     if success {
@@ -845,18 +849,11 @@ delete_buffer_from_disk :: (using buffer: *Buffer) -> deleted: bool {
     if !success then return false;
 
     deleted          = true;
-    has_file         = false;
     modified         = false;
     modified_on_disk = false;
 
-    lock(*open_buffers_lock);
-    {
-        removed := table_remove(*buffers_table, file_path);
-        assert(removed, "For some reason table_remove failed. This is a very unexpected bug.");
-    }
-    unlock(*open_buffers_lock);
-
     finder.need_to_refresh_results = true;
+    open_file_dialog.should_refresh_entries = true;
 
     if file_is_watched(file_path) then stop_watching_file(file_path);
     return true;
@@ -954,8 +951,9 @@ indentation_detect_from_buffer_contents :: (buffer: *Buffer) {
 }
 
 indentation_use_defaults_for_buffer :: (using buffer: *Buffer) {
-    indentation.type = config.settings.indent_using;
-    indentation.size = cast(u8) config.settings.tab_size;
+    buffer_settings := get_settings(buffer);
+    indentation.type = buffer_settings.indent_using;
+    indentation.size = cast(u8) buffer_settings.tab_size;
     add_success_message("Using defaults (%: %) for this file", ifx indentation.type == .spaces then "Spaces" else "Tabs", indentation.size, dismiss_in_seconds = 5);
 }
 
@@ -1038,8 +1036,9 @@ indentation_convert_to_spaces_for_buffer :: (buffer: *Buffer, buffer_id: s64) {
     restore_cursor_positions(buffer_id, cursor_positions);
     refresh_all_editors_for_buffer(buffer_id);
 
+    buffer_settings := get_settings(buffer);
     buffer.indentation.type = .spaces;
-    buffer.indentation.size = cast(u8) config.settings.tab_size;
+    buffer.indentation.size = cast(u8) buffer_settings.tab_size;
 }
 
 insert_final_newline :: (using buffer: *Buffer) {
@@ -1127,6 +1126,10 @@ find_or_create_an_empty_buffer :: () -> buffer_id: s64, created: bool {
     init_buffer(buffer);
     buffer.has_file = false;
 
+    // These values will be overwritten later if `detect_intentation` is true
+    buffer.indentation.type = config.settings.indent_using;
+    buffer.indentation.size = 0;
+
     rescan_for_lines(buffer);
     retokenize(buffer);
 
@@ -1190,7 +1193,24 @@ find_or_create_buffer :: (path: string) -> buffer_id: s64, created: bool {
     rescan_for_lines(buffer);
     retokenize(buffer);
 
+    recalculate_settings(buffer);
+
+    // These values will be overwritten later if `detect_intentation` is true
+    buffer_settings := get_settings(buffer);
+    buffer.indentation.type = buffer_settings.indent_using;
+    buffer.indentation.size = 0;
+
     return buffer_id, true;
+}
+
+find_buffer_id_by_path :: (path: string) -> buffer_id: s64 {
+    lock(*open_buffers_lock);
+    defer unlock(*open_buffers_lock);
+
+    buffer_id, found_buffer := table_find(*buffers_table, path);
+    if found_buffer return buffer_id;
+
+    return -1;
 }
 
 get_buffer_name :: (buffer: Buffer) -> string {
@@ -1211,26 +1231,28 @@ get_buffer_name :: (buffer: Buffer) -> string {
 }
 
 get_buffer_indentation_and_tab_size :: inline (using buffer: Buffer) -> Indentation, tab_size: s32 {
+    buffer_settings := get_settings(buffer);
     if indentation.size > 0 {
-        return indentation.type, ifx indentation.type == .spaces then indentation.size else cast(s32) config.settings.tab_size;
+        return indentation.type, ifx indentation.type == .spaces then indentation.size else cast(s32) buffer_settings.tab_size;
     } else {
-        return config.settings.indent_using, cast(s32) config.settings.tab_size;
+        return buffer_settings.indent_using, cast(s32) buffer_settings.tab_size;
     }
 }
 
 get_buffer_tab_size :: inline (using buffer: Buffer) -> s32 {
+    buffer_settings := get_settings(buffer);
     if indentation.size > 0 {
-        return ifx indentation.type == .spaces then indentation.size else cast(s32) config.settings.tab_size;
+        return ifx indentation.type == .spaces then indentation.size else cast(s32) buffer_settings.tab_size;
     } else {
-        return cast(s32) config.settings.tab_size;
+        return cast(s32) buffer_settings.tab_size;
     }
 }
 
-maybe_detect_and_set_indentation :: (buffer_id: s64) {
-    buffer := *open_buffers[buffer_id];
+maybe_detect_and_set_indentation :: (buffer: *Buffer) {
     if buffer.readonly || buffer.deleted || buffer.internal return;
 
-    if config.settings.detect_indentation {
+    buffer_settings := get_settings(buffer);
+    if buffer_settings.detect_indentation {
         // With this setting on all buffers need to attempt to detect indentation unless already set
         if buffer.indentation.size <= 0 && !buffer.indentation.was_manually_set then detect_and_set_indentation(buffer);
     } else {
@@ -1240,10 +1262,12 @@ maybe_detect_and_set_indentation :: (buffer_id: s64) {
 }
 
 detect_and_set_indentation :: (using buffer: *Buffer) -> enum { success; error; not_enough_data; } {
+    buffer_settings := get_settings(buffer);
+
     if is_empty(bytes) {
         // Empty files get default indentation
-        indentation.type = config.settings.indent_using;
-        indentation.size = cast(u8) config.settings.tab_size;
+        indentation.type = buffer_settings.indent_using;
+        indentation.size = cast(u8) buffer_settings.tab_size;
         return .not_enough_data;
     }
 
@@ -1301,21 +1325,21 @@ detect_and_set_indentation :: (using buffer: *Buffer) -> enum { success; error; 
 
     if num_lines_with_tabs < 2 && num_lines_with_spaces < 2 {
         // Not enough information, use defaults
-        indentation.type = config.settings.indent_using;
-        indentation.size = cast(u8) config.settings.tab_size;
+        indentation.type = buffer_settings.indent_using;
+        indentation.size = cast(u8) buffer_settings.tab_size;
         return .not_enough_data;
     }
 
     if num_lines_with_tabs > num_lines_with_spaces {
         // Assuming tabs
         indentation.type = .tabs;
-        indentation.size = cast(u8) config.settings.tab_size;
+        indentation.size = cast(u8) buffer_settings.tab_size;
         return .success;
     }
 
     // Assuming spaces
     indentation.type = .spaces;
-    indentation.size = cast(u8) config.settings.tab_size;  // fallback
+    indentation.size = cast(u8) buffer_settings.tab_size;  // fallback
 
     // Find the most common line difference
     max_lines := 0;
@@ -1347,6 +1371,7 @@ refresh_buffer_from_disk_by_path :: (path: string) {
         if found_buffer {
             open_buffers[buffer_id].deleted = true;
             finder.need_to_refresh_results = true;
+            open_file_dialog.should_refresh_entries = true;
         }
         unlock(*open_buffers_lock);
 
@@ -1365,14 +1390,28 @@ refresh_buffer_from_disk_by_path :: (path: string) {
 
     buffer := *open_buffers[buffer_id];
 
-    if !buffer_file_has_changed_on_disk(buffer) return;
+    // If we got to this point, the file definitely exists. Mark it as not deleted.
+    // This will "undelete" previously deleted files, which is helpful when e.g. a user
+    // switches branches in version control
+    buffer.deleted = false;
+    open_file_dialog.should_refresh_entries = true;
 
-    finder.need_to_refresh_results = true;
+    if !buffer_file_has_changed_on_disk(buffer) return;
 
     // Buffer may have changed on disk - reload and compare hashes to be sure
     assert(platform_path_equals(path, buffer.file.full_path));
 
-    // Reload buffer from disk
+    reload_from_disk(buffer_id);
+
+    finder.need_to_refresh_results = true;
+}
+
+reload_from_disk :: (buffer_id: s64, force := false, show_user_messages := false) {
+    buffer := *open_buffers[buffer_id];
+    assert(buffer.has_file && buffer.file.full_path);
+
+    path := buffer.file.full_path;
+
     file_contents_str, success := read_entire_file(path);
     if is_file_binary(file_contents_str) {
         free(file_contents_str);
@@ -1380,38 +1419,40 @@ refresh_buffer_from_disk_by_path :: (path: string) {
         buffer.readonly = true;
     }
 
-    if !success { log_error("Couldn't read file '%'\n", path); return; }
+    if !success {
+        if show_user_messages {
+            add_user_error("Couldn't read file:\n%", path);
+        } else {
+            log_error("Couldn't read file:\n%", path);
+        }
+        return;
+    }
     defer free(file_contents_str);
 
-    lock(*buffer.content_lock);
     bytes_removed := remove_crlf_in_place(*file_contents_str);
-    unlock(*buffer.content_lock);
-
     file_hash := calculate_hash(cast([] u8) file_contents_str);
-    if buffer.meow_hash == file_hash  return;  // file hasn't actually changed
+    if buffer.meow_hash == file_hash && !force return;
 
     buffer.crlf = bytes_removed > 0;
     buffer.meow_hash = file_hash;
     buffer.deleted = false;
 
-    if buffer.modified {
+    if buffer.modified && !force {
         // Mark conflict
         // TODO: display a dialog prompting to reload
         buffer.modified_on_disk = true;
     } else {
+        buffer.modified_on_disk = false;
         remember_last_mod_info(buffer);
-
         cursor_positions := remember_cursor_positions(buffer_id, in = .all_editors);
-
         replace_range(buffer, .{ 0, buffer.bytes.count }, file_contents_str);
-
         restore_cursor_positions(buffer_id, cursor_positions);
     }
 
     refresh_all_editors_for_buffer(buffer_id);
 }
 
-reload_from_disk :: (buffer_id: s64) {
+user_reload_from_disk :: (buffer_id: s64) {
     // The difference between this function and `refresh_buffer_from_disk_by_path` is that
     // this function is invoked by user and it will force reload and will produce user messages,
     // whereas the other one is automatic and is silent
@@ -1421,37 +1462,10 @@ reload_from_disk :: (buffer_id: s64) {
         add_user_warning("Buffer has no associated file", dismiss_in_seconds = 5);
         return;
     }
-    path := buffer.file.full_path;
 
-    // Force reload buffer from disk, even if unchanged, and clear the flags
-    file_contents_str, success := read_entire_file(path);
-    if is_file_binary(file_contents_str) {
-        free(file_contents_str);
-        file_contents_str = sprint("Couldn't display file '%' because it's either binary or contains non-UTF8 characters.", path);
-        buffer.readonly = true;
-    }
+    reload_from_disk(buffer_id, force = true, show_user_messages = true);
 
-    if !success { add_user_error("Couldn't read file:\n%", path); return; }
-    defer free(file_contents_str);
-
-    bytes_removed := remove_crlf_in_place(*file_contents_str);
-
-    buffer.crlf = bytes_removed > 0;
-    buffer.meow_hash = calculate_hash(cast([] u8) file_contents_str);
-    buffer.deleted = false;
-    buffer.modified = false;  // if the user had unsaved changes and needs them again, undo should help
-
-    remember_last_mod_info(buffer);
-
-    cursor_positions := remember_cursor_positions(buffer_id, in = .all_editors);
-
-    replace_range(buffer, .{ 0, buffer.bytes.count }, file_contents_str);
-
-    restore_cursor_positions(buffer_id, cursor_positions);
-
-    refresh_all_editors_for_buffer(buffer_id);
-
-    add_success_message("File contents has been reloaded from\n%", path);
+    add_success_message("File contents has been reloaded from\n%", buffer.file.full_path);
 
     finder.need_to_refresh_results = true;
 }
@@ -1472,6 +1486,7 @@ maybe_mark_buffer_as_deleted :: (buffer_id: s64) {
 
     buffer.deleted = true;
     finder.need_to_refresh_results = true;
+    open_file_dialog.should_refresh_entries = true;
 }
 
 free_buffer :: (using buffer: *Buffer) {
@@ -1486,6 +1501,7 @@ free_buffer :: (using buffer: *Buffer) {
     free(redos);
     free(edits);
     free(cursors);
+    free(settings);
 
     if has_file && file.full_path then free(file.full_path);
 
@@ -1530,10 +1546,6 @@ get_range_as_string :: (buffer: Buffer, range: Offset_Range) -> string {
 
 init_buffer :: (using buffer: *Buffer) {
     init(*content_lock);
-
-    // These values will be overwritten later if `detect_intentation` is true
-    indentation.type = config.settings.indent_using;
-    indentation.size = 0;
 }
 
 get_unsaved_buffer_ids :: () -> [] s64 /* temp */ {
@@ -1719,6 +1731,8 @@ Buffer :: struct {
     edits: Array(Edit);  // current edits, not in a group yet
 
     cursors: Array(Cursor);  // cursor state before any current edits were made
+
+    settings: *Settings;  // a pointer to buffer-specific settings. Null means use global settings
 
     content_lock: Mutex;  // must hold while modifying content (or reading in a non-main thread)
 

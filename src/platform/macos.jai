@@ -74,13 +74,18 @@ platform_wake_up_main_thread :: () {
 }
 
 platform_set_refresh_timer :: inline (window: Window_Type) {
-    destroy_timer(platform_timer);
-    platform_timer = create_timer(50, true);
+    destroy_timer(refresh_timer);
+    refresh_timer = create_timer(1000, true);
 }
 
-platform_kill_refresh_timer :: inline (window: Window_Type) {
-    destroy_timer(platform_timer);
-    platform_timer = null;
+platform_set_cursor_timer :: inline (window: Window_Type) {
+    destroy_timer(cursor_timer);
+    cursor_timer = create_timer(50, true);
+}
+
+platform_kill_cursor_timer :: inline (window: Window_Type) {
+    destroy_timer(cursor_timer);
+    cursor_timer = null;
 }
 
 platform_enumerate_logical_drives :: inline () -> [] string {
@@ -121,24 +126,36 @@ platform_set_border_color :: inline () {
     //       causes the meta-program to crash.
     if #compile_time return;
 
-    bg := map_color_to_vec4(.BACKGROUND_0);
+    dark_string  :: "NSAppearanceNameDarkAqua";
+    light_string :: "NSAppearanceNameAqua";
 
-    // There is no way to set the color of the title bar directly. Instead we set the titlebar as
-    // "transparent" and the window's color background to the active theme's background color.
-    color := NSColor.colorWithRed(bg.x, bg.y, bg.z, 1.0);
-    defer release(color);
-    NSWindow.setTitlebarAppearsTransparent(window, YES);
-    NSWindow.setBackgroundColor(window, color);
+    appearance_name : string;
 
-    // There is no way to change the color of the title bar text directly. As a result we do
-    // the following:
-    //   1. classify the active theme's background color as either "dark" or "light". We do this
-    //      by applying the algorithm described on this page: http://alienryderflex.com/hsp.html
-    //   2. we set the window appearance to be either the "dark" on "light" macOS theme based on
-    //      the result of the classification from step 1, which indirectly set a (hopefully)
-    //      appropriate titlebar text color.
-    hsp := sqrt(bg.x * bg.x * .299 + bg.y * bg.y * .587 + bg.z * bg.z * .114) * 256.0;
-    appearance_name := ifx hsp < 130 then "NSAppearanceNameDarkAqua" else "NSAppearanceNameAqua";
+    if config.settings.colored_titlebar {
+        bg := map_color_to_vec4(.BACKGROUND_0);
+
+        // There is no way to set the color of the title bar directly. Instead we set the titlebar as
+        // "transparent" and the window's color background to the active theme's background color.
+        color := NSColor.colorWithRed(bg.x, bg.y, bg.z, 1.0);
+        defer release(color);
+        NSWindow.setTitlebarAppearsTransparent(window, YES);
+        NSWindow.setBackgroundColor(window, color);
+
+        // There is no way to change the color of the title bar text directly. As a result we do
+        // the following:
+        //   1. classify the active theme's background color as either "dark" or "light". We do this
+        //      by applying the algorithm described on this page: http://alienryderflex.com/hsp.html
+        //   2. we set the window appearance to be either the "dark" on "light" macOS theme based on
+        //      the result of the classification from step 1, which indirectly set a (hopefully)
+        //      appropriate titlebar text color.
+        hsp := sqrt(bg.x * bg.x * .299 + bg.y * bg.y * .587 + bg.z * bg.z * .114) * 256.0;
+        appearance_name = ifx hsp < 130 then dark_string else light_string;
+    } else {
+        appearance_name = ifx config.settings.dark_titlebar then dark_string else light_string;
+
+        NSWindow.setTitlebarAppearsTransparent(window, NO);
+    }
+
     NSWindow.setAppearance(window, NSAppearance.appearanceNamed(NSString.getTempString(appearance_name)));
 }
 
@@ -179,7 +196,8 @@ monitors : [..] Monitor;
 //  - @ileonte 23.01.2024
 //
 native_timers: Table(*Focus_Timer, *NSTimer);
-platform_timer: *Focus_Timer;
+refresh_timer: *Focus_Timer;
+cursor_timer:  *Focus_Timer;
 
 timer_class_registered := false;
 Focus_Timer :: struct {

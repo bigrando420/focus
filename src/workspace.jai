@@ -186,49 +186,27 @@ workspace_update :: () {
     if files_changed {
         // NOTE: these count comparisons are intentional because count can be -1
         if watchers.project_file_modified.count > 0 && (!should_ignore_file(watchers.project_file_modified) || is_our_config_file(watchers.project_file_modified)) {
-            #if DEBUG_FILE_REFRESH log("Attempting to refresh based on project_file_modified: %\n", watchers.project_file_modified);
             refresh_buffer_from_disk_by_path(path = watchers.project_file_modified);
         }
         if watchers.external_file_modified.count > 0 && (!should_ignore_file(watchers.external_file_modified) || is_our_config_file(watchers.external_file_modified)) {
-            #if DEBUG_FILE_REFRESH log("Attempting to refresh based on external_file_modified: %\n", watchers.external_file_modified);
             refresh_buffer_from_disk_by_path(path = watchers.external_file_modified);
         }
 
         visitor_func :: (file: *File_Visit_Info, userdata: *void) {
             if file.is_directory {
-                if !should_descend_into_dir(file.full_name) {
-                    file.descend_into_directory = false;
-                    #if DEBUG_FILE_REFRESH log("% - not descending into the directory", file.full_name);
-                    return;
-                }
-                #if DEBUG_FILE_REFRESH log("% - directory. Descending into it...", file.full_name);
+                if !should_descend_into_dir(file.full_name) then file.descend_into_directory = false;
                 return;
             }
-            if file.is_symlink {
-                #if DEBUG_FILE_REFRESH log("% - symlink. Ignoring...", file.full_name);
-                return;
-            }
+            if file.is_symlink return;
 
-            if should_ignore_file(file.full_name) && !is_our_config_file(file.full_name) {
-                #if DEBUG_FILE_REFRESH log("% - ignoring", file.full_name);
-                return;
-            }
+            if should_ignore_file(file.full_name) && !is_our_config_file(file.full_name) return;
 
-            #if DEBUG_FILE_REFRESH log("% - attempting to refresh", file.full_name);
             refresh_buffer_from_disk_by_path(path = file.full_name);
         }
 
         // @Speed: it should be ok to rescan everything recursively, because
         // most of the files will already be loaded and they won't refresh if unchanged
-        #if DEBUG_FILE_REFRESH {
-            if dirs_to_rescan log("Scanning dirs_to_rescan: % ===========================", dirs_to_rescan);
-        }
-
         for dirs_to_rescan visit_files(it, recursive = true, null, visitor_func, visit_directories = true);
-
-        #if DEBUG_FILE_REFRESH {
-            if dirs_to_rescan log("Finished scanning =====================================");
-        }
     }
 
     array_reset(*dirs_to_rescan);
@@ -267,6 +245,9 @@ reload_workspace :: (automatic := false) {
     editor_id_map: Table(s64, s64);
     editor_id_map.allocator = temp;
 
+    buffers_to_refresh_from_disk: [..] s64;
+    buffers_to_refresh_from_disk.allocator = temp;
+
     for * buffer, old_buffer_id : open_buffers {
         buffer := *open_buffers[old_buffer_id];
         if should_keep_buffer_when_reloading_workspace(buffer) {
@@ -276,7 +257,9 @@ reload_workspace :: (automatic := false) {
                 table_add(*buffers_table, copy_string(buffer.file.full_path), new_buffer_id);
                 start_watching_file_if_not_already(buffer.file.full_path);
                 buffer.file = get_file_info_from_full_path(buffer.file.full_path);  // refresh file info to reflect new project dirs
+                array_add(*buffers_to_refresh_from_disk, new_buffer_id);
             }
+            recalculate_settings(buffer);
 
             bucket_array_add(*new_open_buffers, buffer.*);
 
@@ -341,6 +324,10 @@ reload_workspace :: (automatic := false) {
         }
     }
 
+    // Refresh file-backed buffers from disk.
+    // At this point the user either saved all buffers or told us to discard unsaved changes
+    for buffer_id : buffers_to_refresh_from_disk  reload_from_disk(buffer_id, force = true);
+
     if !automatic then show_open_file_dialog(.search);
 
     init_build_system();  // must do after we've cleared editors and buffers
@@ -358,7 +345,9 @@ reload_workspace :: (automatic := false) {
 }
 
 should_keep_buffer_when_reloading_workspace :: (using buffer: Buffer) -> bool {
-    if !has_file return false;  // if this is a special buffer we can recreate it later. If the buffer is unsaved, we're throwing it away (because the user decided not to save it)
+    // If this is a special buffer we can recreate it later.
+    // If the buffer is unsaved, we're throwing it away (because the user decided not to save it)
+    if !has_file || deleted return false;
 
     if is_our_config_file(file.full_path) return true;
     if should_ignore_file(file.full_path) return false;
@@ -500,15 +489,6 @@ start_file_watcher :: () {
 }
 
 file_change_callback :: (watcher: *File_Watcher(void), change: *File_Change, user_data: *void) {
-    #if DEBUG_FILE_REFRESH {
-        b: String_Builder;
-        b.allocator = temp;
-        print_to_builder(*b, "%", <<change);
-        change_kind := "Project file";
-        if watcher == *watchers.external_watcher change_kind = "External file";
-        defer log("% change: %\n", change_kind, builder_to_string(*b,, allocator = temp));
-    }
-
     maybe_add_to_queue :: (dir: string) {
         add_to_queue := true;
         for dirs_to_rescan {
@@ -522,19 +502,13 @@ file_change_callback :: (watcher: *File_Watcher(void), change: *File_Change, use
     }
 
     // If the change is in one of the ignored dirs, ignore it
-    if should_ignore_path(change.full_path) && !is_our_config_file(change.full_path) {
-        #if DEBUG_FILE_REFRESH append(*b, " - ignore because of dir");
-        return;
-    }
+    if should_ignore_path(change.full_path) && !is_our_config_file(change.full_path) return;
 
     if watcher == *watchers.external_watcher {
         // If the change is caused by watching a dir containing a standalone file, ignore it
         if !is_directory(change.full_path) {
             parent_dir := get_parent_dir_path(change.full_path);
-            if !dir_is_within_project(parent_dir) && !file_is_watched(change.full_path) {
-                #if DEBUG_FILE_REFRESH append(*b, " - ignore because of parent dir");
-                return;
-            }
+            if !dir_is_within_project(parent_dir) && !file_is_watched(change.full_path) return;
         }
 
         watchers.external_file_modified = copy_temporary_string(change.full_path);
@@ -561,14 +535,6 @@ file_change_callback :: (watcher: *File_Watcher(void), change: *File_Change, use
             }
             if dir_is_within_project(dir) then maybe_add_to_queue(dir);
         }
-    }
-
-    #if DEBUG_FILE_REFRESH {
-        if watchers.project_file_modified  print_to_builder(*b, " | watchers.project_file_modified: %",  watchers.project_file_modified);
-        if watchers.external_file_modified print_to_builder(*b, " | watchers.external_file_modified: %", watchers.external_file_modified);
-        if dirs_to_rescan append(*b, " | dirs_to_rescan: ");
-        else append(*b, " | dirs_to_rescan: none");
-        for dirs_to_rescan print_to_builder(*b, "% | ", it);
     }
 
     // NOTE: Instead of processing individual events and using the flags we're simply

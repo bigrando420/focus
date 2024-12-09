@@ -39,7 +39,6 @@ to_bytes :: (src: string) -> [] u8 {
     return result;
 }
 
-// Intended for compile-time
 arrays_concat :: (array1: [] $T, array2: [] T) -> [] T {
     result: [..] T;
     array_add(*result, ..array1);
@@ -535,7 +534,7 @@ trim_both_sides :: (s: string, chars := " \t") -> string, left: s64, right: s64 
         else break;
     }
 
-    for < s.count-1..left {
+    for #v2 < left..s.count-1 {
         if is_any(s[it], chars) right += 1;
         else break;
     }

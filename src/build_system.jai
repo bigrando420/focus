@@ -26,6 +26,7 @@ deinit_build_system :: () {
     build_buffer_id = -1;
     build_editor_id = -1;
     running_command = "";
+    last_command_result = .{};
 }
 
 execute_build_command :: (command: *Build_Command) {
@@ -141,9 +142,11 @@ build_system_update :: () {
         defer unlock(*build_mutex);
 
         output := builder_to_string(*stdout);
+        defer free(output);
         print_to_output_panel_from_main_thread(output);
 
         error_output := builder_to_string(*stderr);
+        defer free(error_output);
         print_to_output_panel_from_main_thread(error_output);
     }
 
@@ -496,7 +499,7 @@ print_to_output_panel_from_main_thread :: (s: string, mark_as: Buffer_Region.Kin
         lock(*buffer.content_lock);
         resize(*buffer.tokens, buffer.bytes.count);  // resize first before we delete
         delete_range_raw(buffer, 0, bytes_to_forget);
-        array_delete_bytes(xx *buffer.tokens, 0, bytes_to_forget);
+        delete_range(*buffer.tokens, 0, bytes_to_forget);
         unlock(*buffer.content_lock);
 
         for * last_command_result.build_errors {
@@ -522,7 +525,7 @@ substitute_variables :: (using work: *Build_Thread_Work) {
         if is_build_panel(current_editor_id) then current_editor_id = editors.left;
         if is_build_panel(current_editor_id) then current_editor_id = editors.right;
 
-        if current_editor_id >= 0 {
+        if current_editor_id >= 0 && current_editor_id < open_editors.count {
             buffer := open_buffers[open_editors[current_editor_id].buffer_id];
             if buffer.has_file then file = copy_string(buffer.file.full_path);
         }
@@ -873,7 +876,7 @@ Build_Error :: struct {
     error_info_end_offset:   s32;
 }
 
-MAX_BUILD_OUTPUT_BUFFER_SIZE :: 6 * 1024 * 1024;
+MAX_BUILD_OUTPUT_BUFFER_SIZE :: 2 * 1024 * 1024;
 
 
 #scope_file

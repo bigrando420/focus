@@ -22,6 +22,8 @@ This editor is for people who value simplicity, are sensitive to input latency a
 
 5. A project in this editor is just a config file that lives in `projects/Project Name.focus-config`. There's an example project config file provided. You just edit the file and then activate the project by using the `Switch To Project` command.
 
+NOTE: if you are on a newer macOS you may have to run `xattr -d com.apple.quarantine /Applications/Focus.app` in order to be able to run the editor, until we are able to sign the executable.
+
 
 ## Official Discord server
 
@@ -32,7 +34,9 @@ https://discord.gg/eSXquAzTmW
 
 `$ jai first.jai - release`
 
-Minimum Jai version: `0.1.090` (the language is currently in closed beta, but it will hopefully go into open beta soon)
+(NOTE: it's `- release`, not `-release`)
+
+Minimum Jai version: `0.1.096` (the language is currently in closed beta, but it will hopefully go into open beta soon)
 
 **On macOS:**
 
