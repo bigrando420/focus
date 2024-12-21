@@ -1006,6 +1006,7 @@ focus_allocator: Allocator;
 #load "langs/rust.jai";
 #load "langs/markdown.jai";
 #load "langs/batch.jai";
+#load "langs/swift.jai";
 
 #if OS == .WINDOWS {
     #load "platform/windows.jai";
@@ -1018,7 +1019,7 @@ focus_allocator: Allocator;
     #assert false, "Unsupported OS";
 }
 
-using Basic :: #import "Basic"()(MEMORY_DEBUGGER = DEBUG);
+using Basic :: #import "Basic"()(MEMORY_DEBUGGER = DEBUG, TEMP_ALLOCATOR_POISON_FREED_MEMORY = DEBUG);
 #import "Atomics";
 #import "Compiler";
 #import "File";
