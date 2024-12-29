@@ -1,6 +1,5 @@
 .build/
 *.pdb
-*.exe
 *.rdbg
 *.dSYM/
 *.dmg

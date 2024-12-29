@@ -1,4 +1,4 @@
-[9]  # Version number. Do not delete.
+[13]  # Version number. Do not delete.
 
 [[workspace]]
 # These directories and files will be scanned when a workspace is opened so that search etc. works.
@@ -10,6 +10,8 @@ C:/rando/dev/jai/modules
 #C:/rando/dev/jai/changelog.txt
 
 [ignore]
+C:/rando/dev/game7/.git/**
+C:/rando/dev/game7/steamworks_sdk_159/**
 C:/rando/dev/game7/logs/**
 C:/rando/dev/game7/release/**
 C:/rando/dev/game7/build/**
@@ -75,3 +77,7 @@ key_binding:            F3
 #       Some sections, such as [[workspace]] or [[build commands]], will completely replace those in the global config,
 #       while other sections such as [[keymap]] or [[style]] will try to merge with the corresponding sections in the global
 #       config, allowing to override only some of the keys or colors.
+
+[[style]]
+
+theme: gruvbox-flat

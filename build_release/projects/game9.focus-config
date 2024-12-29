@@ -1,0 +1,79 @@
+[13]  # Version number. Do not delete.
+
+[[workspace]]
+# These directories and files will be scanned when a workspace is opened so that search etc. works.
+# Example:
+C:/rando/dev/game9
+C:/rando/dev/odin/base
+C:/rando/dev/odin/core
+C:/rando/dev/odin/vendor
+
+[ignore]
+C:/rando/dev/game9/examples/**
+**/.git/**
+**/*.sln
+
+[file associations]
+todo.txt : todo
+
+[[build commands]]
+build_working_dir: C:/rando/dev/game9
+open_panel_on_build:    true
+# close_panel_on_success: false
+clear_build_output_before_running: true
+
+error_regex: ^(?P<file>.*)\((?P<line>\d+):(?P<col>\d+)\) (?P<msg>.*)
+auto_jump_to_error: true
+
+# [Debug Build And Run]
+# build_command:          build.bat
+# build_working_dir:      C:/rando/dev/game9
+# timeout_in_seconds:     5
+# run_command:            sauce.exe
+# run_working_dir:        C:/rando/dev/game9
+# key_binding:            F2
+
+[Debug Build]
+build_command:          build.bat
+build_working_dir:      C:/rando/dev/game9
+timeout_in_seconds:     5
+key_binding:            F1
+
+[Run]
+run_command:            sauce.exe
+run_working_dir:        C:/rando/dev/game9
+key_binding:            F3
+
+
+# [Run]                   # <- You could have commands that don't build anything and just run something
+# run_command:            test
+# run_working_dir:        /home/user/test
+# key_binding:            Ctrl-F5
+
+# [Release]
+# build_command:          jai first.jai - release
+# key_binding:            F9
+
+
+# Example error regexes:
+# For jai:    ^(?P<file>.*):(?P<line>\d+),(?P<col>\d+): (?P<type>Error|Warning|Info|...):* (?P<msg>.*)|^(?P<msg1>.*error LNK.*)
+# For msvc:   ^(?P<file>.*)\((?P<line>\d+),?(?P<col>\d+)?\)[ ]?: (?P<type>error|warning) (?P<msg>.*)$
+# For golang: ^(?P<file>.*):(?P<line>\d+):(?P<col>\d+): (?P<msg>.*)$
+# For gcc:    ^(?P<file>.*):(?P<line>\d+):(?P<col>\d+): (?P<type>error|warning): (?P<msg>.*) (\[(?P<msg1>.*)\])?$
+# ... let us know what regex works for you and we'll add it here
+
+# NOTE:
+# You can use the following variables in build_command or run_command:
+# %FILE%      - full path to currenly active file
+# %FILE_DIR%  - the directory of the currently active file
+# %FILE_NAME% - current file name, with extension
+# %FILE_NAME_NO_EXTENSION% - current file name, without extension
+# %BUILD_WORKING_DIR% - working dir of the build command
+# %RUN_WORKING_DIR%   - working dir of the run command
+
+
+
+# NOTE: You can override any section from the global config in your project and it will be used when your project is active.
+#       Some sections, such as [[workspace]] or [[build commands]], will completely replace those in the global config,
+#       while other sections such as [[keymap]] or [[style]] will try to merge with the corresponding sections in the global
+#       config, allowing to override only some of the keys or colors.

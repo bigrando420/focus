@@ -1,4 +1,4 @@
-[6]  # Version number. Do not delete.
+[9]  # Version number. Do not delete.
 
 [[workspace]]
 # These directories and files will be scanned when a workspace is opened so that search etc. works.
@@ -77,6 +77,9 @@ color_preview_popup:                             enabled  # options: enabled, mi
 highlight_matching_brackets:                     true
 search_is_case_sensitive_when_uppercase_present: false
 projects_sorting_order:                          most_recent_first  #options: most_recent_first, alphabetical, alphabetical_no_case
+
+# Added after migration to version [9]
+show_ruler_at_column:                            0
 
 
 # This is an example configuration for build commands
@@ -218,6 +221,11 @@ Alt-A                       align_cursors
 Alt-Shift-L                 toggle_line_numbers
 
 Ctrl-Shift-Alt-N            open_another_editor_instance
+
+# Added after migration to version [9]
+Ctrl-U                      change_case_cycle
+Ctrl-R                      revert_select_word_or_create_another_cursor
+Ctrl-Y                      move_selection_to_next_word
 
 [open file dialog]
 
@@ -439,3 +447,8 @@ code_header3:                           E0AD82FF
 code_header4:                           E0AD82FF
 code_header5:                           E0AD82FF
 code_header6:                           E0AD82FF
+
+# Added after migration to version [9]
+ruler:                                  196666FF
+bracket_highlight:                      FCEDFC26
+indent_guide:                           FCEDFC26

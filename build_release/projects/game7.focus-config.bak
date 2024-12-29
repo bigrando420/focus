@@ -1,11 +1,18 @@
-[6]  # Version number. Do not delete.
+[9]  # Version number. Do not delete.
 
 [[workspace]]
 # These directories and files will be scanned when a workspace is opened so that search etc. works.
 # Example:
 C:/rando/dev/game7
+
 C:/rando/dev/jai/how_to
 C:/rando/dev/jai/modules
+#C:/rando/dev/jai/changelog.txt
+
+[ignore]
+C:/rando/dev/game7/logs/**
+C:/rando/dev/game7/release/**
+C:/rando/dev/game7/build/**
 
 
 [[build commands]]
