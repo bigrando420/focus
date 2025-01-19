@@ -1,48 +1,27 @@
-[13]  # Version number. Do not delete.
+[6]  # Version number. Do not delete.
 
 [[workspace]]
 # These directories and files will be scanned when a workspace is opened so that search etc. works.
 # Example:
-C:/rando/dev/templates
-C:/rando/dev/odin-raylib-web
-C:/rando/dev/odin/base
-C:/rando/dev/odin/core
-C:/rando/dev/odin/vendor
-C:/rando/dev/odin-examples
-
-[ignore]
-**/.git/**
-C:/rando/dev/odin/core/time/**
+# C:/projects/my-project
+# C:/jai
 
 
 [[build commands]]
-build_working_dir: C:/rando/dev/templates/2d-renderer
-open_panel_on_build:    true
+# build_working_dir:      <build working dir for all commands>
+# open_panel_on_build:    true  #  <- any settings specified here will apply to all commands unless overridden
 # close_panel_on_success: false
-clear_build_output_before_running: true
+# clear_build_output_before_running: false
+# error_regex:            <compiler-specific error regex>  # see examples below
+# auto_jump_to_error:     false
 
-error_regex: ^(?P<file>.*)\((?P<line>\d+):(?P<col>\d+)\) (?P<msg>.*)
-auto_jump_to_error: true
-
-[Debug Build And Run]
-build_command:          build_web.bat
-build_working_dir:      C:/rando/dev/templates/2d-renderer
-timeout_in_seconds:     5
-run_command:            source.exe
-run_working_dir:        C:/rando/dev/templates/2d-renderer
-key_binding:            F2
-
-[Debug Build]
-build_command:          build_web.bat
-build_working_dir:      C:/rando/dev/templates/2d-renderer
-timeout_in_seconds:     5
-key_binding:            F1
-
-[Run]
-run_command:            source.exe
-run_working_dir:        C:/rando/dev/templates/2d-renderer
-key_binding:            F3
-
+# [Debug Build And Run]   # <- command name. Can be arbitrary
+# build_command:          jai main.jai  # should be an executable or a script
+# build_working_dir:      <build working dir for this command only>
+# timeout_in_seconds:     5             # if you don't want a timeout, don't specify it
+# run_command:            test.exe      # will be run if build succeeds
+# run_working_dir:        W:/focus      # working dir for the run command
+# key_binding:            F5
 
 # [Run]                   # <- You could have commands that don't build anything and just run something
 # run_command:            test
@@ -76,7 +55,3 @@ key_binding:            F3
 #       Some sections, such as [[workspace]] or [[build commands]], will completely replace those in the global config,
 #       while other sections such as [[keymap]] or [[style]] will try to merge with the corresponding sections in the global
 #       config, allowing to override only some of the keys or colors.
-
-[[style]]
-
-theme: nord-midnight

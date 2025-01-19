@@ -3,20 +3,20 @@
 [[workspace]]
 # These directories and files will be scanned when a workspace is opened so that search etc. works.
 # Example:
-C:/rando/dev/templates
-C:/rando/dev/odin-raylib-web
+C:/rando/dev/game8
 C:/rando/dev/odin/base
 C:/rando/dev/odin/core
 C:/rando/dev/odin/vendor
-C:/rando/dev/odin-examples
+C:/rando/dev/odin/odin-examples
 
 [ignore]
-**/.git/**
-C:/rando/dev/odin/core/time/**
+C:/rando/dev/game8/examples/**
+C:/rando/dev/game8/.git/**
+C:/rando/dev/game8/.build/**
 
 
 [[build commands]]
-build_working_dir: C:/rando/dev/templates/2d-renderer
+build_working_dir: C:/rando/dev/game8
 open_panel_on_build:    true
 # close_panel_on_success: false
 clear_build_output_before_running: true
@@ -25,22 +25,22 @@ error_regex: ^(?P<file>.*)\((?P<line>\d+):(?P<col>\d+)\) (?P<msg>.*)
 auto_jump_to_error: true
 
 [Debug Build And Run]
-build_command:          build_web.bat
-build_working_dir:      C:/rando/dev/templates/2d-renderer
+build_command:          jai build.jai
+build_working_dir:      C:/rando/dev/game8
 timeout_in_seconds:     5
-run_command:            source.exe
-run_working_dir:        C:/rando/dev/templates/2d-renderer
+run_command:            game.exe
+run_working_dir:        C:/rando/dev/game8
 key_binding:            F2
 
 [Debug Build]
-build_command:          build_web.bat
-build_working_dir:      C:/rando/dev/templates/2d-renderer
+build_command:          jai build.jai
+build_working_dir:      C:/rando/dev/game8
 timeout_in_seconds:     5
 key_binding:            F1
 
 [Run]
-run_command:            source.exe
-run_working_dir:        C:/rando/dev/templates/2d-renderer
+run_command:            game.exe
+run_working_dir:        C:/rando/dev/game8
 key_binding:            F3
 
 
@@ -76,7 +76,3 @@ key_binding:            F3
 #       Some sections, such as [[workspace]] or [[build commands]], will completely replace those in the global config,
 #       while other sections such as [[keymap]] or [[style]] will try to merge with the corresponding sections in the global
 #       config, allowing to override only some of the keys or colors.
-
-[[style]]
-
-theme: nord-midnight

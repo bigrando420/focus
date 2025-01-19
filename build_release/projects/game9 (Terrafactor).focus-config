@@ -3,20 +3,24 @@
 [[workspace]]
 # These directories and files will be scanned when a workspace is opened so that search etc. works.
 # Example:
-C:/rando/dev/templates
-C:/rando/dev/odin-raylib-web
+C:/rando/dev/game9
 C:/rando/dev/odin/base
 C:/rando/dev/odin/core
 C:/rando/dev/odin/vendor
 C:/rando/dev/odin-examples
 
 [ignore]
+C:/rando/dev/game9/examples/**
 **/.git/**
-C:/rando/dev/odin/core/time/**
+**/*.sln
+**/env.odin
+C:/rando/dev/odin/core/prof/spall/**
 
+[file associations]
+todo.txt : todo
 
 [[build commands]]
-build_working_dir: C:/rando/dev/templates/2d-renderer
+build_working_dir: C:/rando/dev/game9
 open_panel_on_build:    true
 # close_panel_on_success: false
 clear_build_output_before_running: true
@@ -24,23 +28,28 @@ clear_build_output_before_running: true
 error_regex: ^(?P<file>.*)\((?P<line>\d+):(?P<col>\d+)\) (?P<msg>.*)
 auto_jump_to_error: true
 
-[Debug Build And Run]
-build_command:          build_web.bat
-build_working_dir:      C:/rando/dev/templates/2d-renderer
-timeout_in_seconds:     5
-run_command:            source.exe
-run_working_dir:        C:/rando/dev/templates/2d-renderer
-key_binding:            F2
+# [Debug Build And Run]
+# build_command:          build.bat
+# build_working_dir:      C:/rando/dev/game9
+# timeout_in_seconds:     5
+# run_command:            sauce.exe
+# run_working_dir:        C:/rando/dev/game9
+# key_binding:            F2
 
 [Debug Build]
-build_command:          build_web.bat
-build_working_dir:      C:/rando/dev/templates/2d-renderer
+build_command:          build.bat
+build_working_dir:      C:/rando/dev/game9
 timeout_in_seconds:     5
 key_binding:            F1
 
+[Debug Build]
+build_command:          build_web.bat
+build_working_dir:      C:/rando/dev/game9
+key_binding:            F2
+
 [Run]
-run_command:            source.exe
-run_working_dir:        C:/rando/dev/templates/2d-renderer
+run_command:            sauce.exe
+run_working_dir:        C:/rando/dev/game9
 key_binding:            F3
 
 
@@ -76,7 +85,3 @@ key_binding:            F3
 #       Some sections, such as [[workspace]] or [[build commands]], will completely replace those in the global config,
 #       while other sections such as [[keymap]] or [[style]] will try to merge with the corresponding sections in the global
 #       config, allowing to override only some of the keys or colors.
-
-[[style]]
-
-theme: nord-midnight
