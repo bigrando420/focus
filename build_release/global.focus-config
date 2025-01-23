@@ -1,0 +1,471 @@
+[13]  # Version number. Do not delete.
+
+[[workspace]]
+# These directories and files will be scanned when a workspace is opened so that search etc. works.
+
+[ignore]
+# Files and directories matching the following wildcards will not be loaded or descended into
+# Example:
+# *.js - will ignore all files with a '.js' extension
+# tmp* - will ignore any files or directories which start with 'tmp'
+# C:/project/dirname/** - will ignore everything under `dirname`
+# C:/project/dirname/*  - will ignore all files under `dirname`, but not recursively
+.svn
+.git
+__pycache__
+*woff?
+*so.*
+
+**/.git/**
+
+[allow]
+# Files and directories matching the wildcards in this section will be loaded, even if they are ignored in the previous section.
+# NOTE: known binary file extensions are ignored by default (*.exe, *.obj etc.). If this is not what you want, you can explicitly allow them here.
+.focus-*
+
+[file associations]
+# Optional file associations in the format `<wildcard1> <wildcard2> ... : <language>`
+# Example:
+# *.hpp *.hh *.h : cpp
+# todo.txt : todo
+
+
+[[settings]]
+
+maximize_on_start:                      true
+open_on_the_biggest_monitor:            false
+cursor_as_block:                        false
+cursor_blink_time_in_seconds:           5
+highlight_selection_occurrences:        true
+show_paste_effect:                      true
+disable_file_open_close_animations:     false
+double_shift_to_search_in_workspace:    false
+tab_size:                               2
+indent_using:                           tabs  # options: spaces, tabs
+strip_trailing_whitespace_on_save:      disabled  # options: all, except_lines_with_cursor, disabled
+smooth_scrolling:                       true
+scroll_beyond_last_line:                true
+line_height_scale_percent:              120
+max_editor_width:                       1200
+can_cancel_go_to_line:                  true
+copy_whole_line_without_selection:      false
+editor_history_size:                    1024
+line_wrap_is_on_by_default:             true
+show_line_numbers:                      true
+colored_titlebar:                       true   # Windows 11+ only
+dark_titlebar:                          false  # Windows only
+hide_mouse_when_typing:                 true
+highlight_line_with_cursor:             false
+draw_indent_guides:                     false
+auto_surround_with_brackets_and_quotes: true
+auto_close_brackets:                    false
+prefer_system_file_dialogs:             false  # Windows only
+status_bar_show_cursors_off_screen:     true
+persist_local_search_results:           false  # if true, search results will stay highlighted and you have to dismiss them using the `escape` action
+
+build_panel_stays_in_one_place:         false  # if false, the build panel will flip to the inactive pane in two pane layouts
+build_panel_line_wrap_always_on:        true
+build_panel_width_percent:              30
+build_panel_height_percent:             25
+
+save_all_file_backed_buffers_on_build:  true
+save_current_buffer_on_build:           false
+
+status_bar_position:                    bottom # valid positions: top, bottom
+
+# Added after migration to version [6]
+load_most_recent_project_on_start:               false
+color_preview_popup:                             enabled  # options: enabled, minimized, disabled
+highlight_matching_brackets:                     true
+search_is_case_sensitive_when_uppercase_present: false
+projects_sorting_order:                          most_recent_first  #options: most_recent_first, alphabetical, alphabetical_no_case
+
+# Added after migration to version [9]
+show_ruler_at_column:                            0
+
+# Added after migration to version [13]
+detect_indentation:                              true  # if true, existing files will be scanned to detect indentation, new files will use the `indent_using` and `tab_size` settings
+status_bar_show_indentation:                     true
+status_bar_show_line_col:                        true
+
+
+# This is an example configuration for build commands
+
+# [[build commands]]
+# build_working_dir:      <build working dir for all commands>
+# open_panel_on_build:    true  #  <- any settings specified here will apply to all commands unless overridden
+# close_panel_on_success: false
+# clear_build_output_before_running: false
+# error_regex:            <compiler-specific error regex>  # see examples below
+# auto_jump_to_error:     false
+
+# [Debug Build And Run]   # <- command name. Can be arbitrary
+# build_command:          jai main.jai  # should be an executable or a script
+# build_working_dir:      <build working dir for this command only>
+# timeout_in_seconds:     5             # if you don't want a timeout, don't specify it
+# run_command:            test.exe      # will be run if build succeeds
+# run_working_dir:        W:/focus      # working dir for the run command
+# key_binding:            F5
+
+# [Run]                   # <- You could have commands that don't build anything and just run something
+# run_command:            test
+# run_working_dir:        /home/user/test
+# key_binding:            Ctrl-F5
+
+# [Release]
+# build_command:          jai first.jai - release
+# key_binding:            F9
+
+
+# Example error regexes:
+# For jai:  ^(?P<file>.*):(?P<line>\d+),(?P<col>\d+): (?P<type>Error|Warning|Info|...):* (?P<msg>.*)|^(?P<msg1>.*error LNK.*)
+# For msvc: ^(?P<file>.*)\((?P<line>\d+),(?P<col>\d+)\): (?P<type>error|warning) (?P<msg>.*)$
+# ... let us know what regex works for you and we'll add it here
+
+# NOTE:
+# You can use the following variables in build_command or run_command:
+# %FILE%      - full path to currenly active file
+# %FILE_DIR%  - the directory of the currently active file
+# %FILE_NAME% - current file name, with extension
+# %FILE_NAME_NO_EXTENSION% - current file name, without extension
+# %BUILD_WORKING_DIR% - working dir of the build command
+# %RUN_WORKING_DIR%   - working dir of the run command
+
+
+[[keymap]]
+
+# - The first matching combination will be used, so order matters
+
+[editors]   # <- this means that the following key combos will apply only when editing text
+
+# Key combination           Action
+Alt-F4                      quit
+
+Ctrl-D                      select_word_or_create_another_cursor
+Ctrl-Shift-A                select_all_occurrences
+
+Ctrl-Shift-D                duplicate_lines
+
+# These shortcuts can be annoying to accidentally use, so they are commented out by default
+# Shift-Backspace             delete_line_and_go_up
+# Shift-Delete                delete_line
+
+Ctrl-K                      delete_to_end_of_line
+Ctrl-Shift-Delete           delete_to_end_of_line
+Ctrl-Shift-Backspace        delete_to_start_of_line
+
+Ctrl-Alt-K                 move_selected_lines_up
+Ctrl-Alt-J               move_selected_lines_down
+
+Ctrl-J                      join_lines
+Ctrl-Shift-J                join_lines_no_spaces_in_between
+
+Tab                         indent_or_go_to_next_tabstop
+Shift-Tab                   unindent
+
+Ctrl-]                      indent
+Ctrl-[                      unindent
+
+Ctrl-S                      save
+Ctrl-Shift-S                save_as
+
+Alt-D                   move_to_previous_editor_history
+Alt-F                    move_to_next_editor_history
+
+{Shift}-Alt-D                 move_to_previous_buffer
+{Shift}-Alt-F               move_to_next_buffer
+
+Ctrl-/                      toggle_comment
+Ctrl-L                      select_line
+
+#Alt-K                       scroll_viewport_up
+Alt-E                       scroll_viewport_up_fast  # for some reason Alt-U didn't reach the window at all, so using Alt-E instead
+#Alt-PageUp                  scroll_viewport_up_fast
+#Alt-J                       scroll_viewport_down
+Alt-W                       scroll_viewport_down_fast
+#Alt-PageDown                scroll_viewport_down_fast
+#Alt-H                       scroll_viewport_left
+#Alt-L                       scroll_viewport_right
+
+Ctrl-Alt-ArrowUp            scroll_viewport_up
+Ctrl-Alt-ArrowDown          scroll_viewport_down
+Ctrl-Alt-ArrowLeft          scroll_viewport_left
+Ctrl-Alt-ArrowRight         scroll_viewport_right
+
+Alt-V                       move_cursor_to_viewport_center
+Alt-Z                       center_viewport_on_cursor
+
+{Shift}-Ctrl-ArrowUp        move_up_to_empty_line
+{Shift}-Ctrl-ArrowDown      move_down_to_empty_line
+
+Alt-Shift-I                 add_cursors_to_line_ends
+Alt-Shift-Ctrl-I            add_cursors_to_line_starts
+
+Enter                       break_line
+Ctrl-Enter                  new_line_below_without_breaking
+Ctrl-Shift-Enter            new_line_above_without_breaking
+
+NumpadEnter                 break_line
+Ctrl-NumpadEnter            new_line_below_without_breaking
+Ctrl-Shift-NumpadEnter      new_line_above_without_breaking
+
+Ctrl-1                      switch_to_left_editor
+Ctrl-2                      switch_to_right_editor
+Alt-,                       switch_to_other_editor
+Ctrl-Shift-,                duplicate_editor
+
+Ctrl-Alt-Shift-ArrowLeft    move_editor_to_the_left
+Ctrl-Alt-Shift-ArrowRight   move_editor_to_the_right
+
+Ctrl-N                      create_new_file
+Ctrl-Shift-N                create_new_file_on_the_side
+
+Alt-Shift-ArrowUp           create_cursor_above
+Alt-Shift-ArrowDown         create_cursor_below
+Alt-A                       align_cursors
+
+#Alt-Z                       toggle_line_wrap
+#Alt-Shift-L                 toggle_line_numbers
+
+Ctrl-Shift-Alt-N            open_another_editor_instance
+
+# Added after migration to version [9]
+Ctrl-U                      change_case_cycle
+Ctrl-R                      revert_select_word_or_create_another_cursor
+Ctrl-Y                      move_selection_to_next_word
+
+# Added after migration to version [13]
+{Shift}-Meta-ArrowLeft      move_left_through_word
+{Shift}-Meta-ArrowRight     move_right_through_word
+{Shift}-Meta-Backspace      delete_left_through_word
+{Shift}-Meta-Delete         delete_right_through_word
+
+[open file dialog]
+
+Enter                       open_entry_in_place
+Ctrl-Enter                  open_entry_on_the_side
+Ctrl-1                      open_entry_on_the_left
+Ctrl-2                      open_entry_on_the_right
+Shift-Enter                 open_entry_in_explorer
+
+Tab                         open_directory
+
+Backspace                   pop_directory
+
+
+[search dialog]
+
+Enter                       open_entry_in_place
+Ctrl-Enter                  open_entry_on_the_side
+Ctrl-1                      open_entry_on_the_left
+Ctrl-2                      open_entry_on_the_right
+
+Shift-Enter                 move_up  # an alternative way to move
+
+Alt-C                       toggle_case_sensitive
+Alt-W                       toggle_whole_word
+Alt-R                       toggle_regex_search
+
+# Added after migration to version [13]
+Tab                         go_to_next_input
+Shift-Tab                   go_to_previous_input
+
+
+[common]
+
+# Common key combos may be used as a fallback if they are not defined in more specific sections.
+# For example, if "move_up" is not defined in [editors], the one in the [common] section will be matched.
+
+Alt-X                       show_commands
+Ctrl-Shift-P                show_commands
+
+Ctrl-Alt-P                  switch_to_project
+
+Alt-/                      search_in_buffer
+Ctrl-Alt-/                       search_in_buffer_dropdown_mode
+Ctrl-Shift-F                search_in_project
+
+Alt-S                      open_file_by_name
+Ctrl-O                      navigate_to_file
+Ctrl-Shift-O                navigate_to_file_from_root
+Ctrl-Tab                    switch_between_open_files
+
+Ctrl-G                      go_to_line
+
+Ctrl-C                      copy
+Ctrl-X                      cut
+Ctrl-V                      paste
+
+Ctrl-Z                      undo
+Ctrl-Shift-Z                redo
+
+Ctrl-D                      select_word
+Ctrl-A                      select_all
+
+Ctrl-W                      close_current_editor
+Ctrl-Shift-W                close_other_editor
+
+Escape                      escape  # combines close_dialog and remove_additional_cursors
+
+#Ctrl-Shift-L                toggle_expand
+
+Ctrl-B                      build_panel_toggle
+
+F11                         toggle_fullscreen
+
+# {Shift}- means shift is optional, the key combination will still be matched.
+# NOTE: in this editor the Shift key is hard-coded to extend selection when held
+{Shift}-Alt-K             move_up
+#{Shift}-Alt-Ctrl-K        move_up_fast
+#{Shift}-PageUp              move_up_one_page
+
+{Shift}-Alt-J           move_down
+#{Shift}-Alt-Ctrl-J      move_down_fast
+#{Shift}-PageDown            move_down_one_page
+
+{Shift}-Alt-H           		move_left
+#       move_left_by_character_type
+{Shift}-Alt-Ctrl-H      move_left_through_word_throttled
+
+{Shift}-Alt-L          move_right
+#      move_right_by_character_type
+{Shift}-Alt-Ctrl-L     move_right_through_word_throttled
+
+{Shift}-Alt-U                jump_to_line_start
+{Shift}-Alt-O                 jump_to_line_end
+Ctrl-Alt-U           jump_to_file_start
+Ctrl-Alt-O            jump_to_file_end
+
+{Shift}-Backspace           delete_left_char
+{Shift}-Delete              delete_right_char
+{Shift}-Alt-Backspace       delete_left_by_character_type
+{Shift}-Alt-Delete          delete_right_by_character_type
+{Shift}-Ctrl-Backspace      delete_left_by_character_type_fast
+{Shift}-Ctrl-Delete         delete_right_by_character_type_fast
+
+Ctrl-Plus                   increase_font_size
+Ctrl-Minus                  decrease_font_size
+Ctrl-0                      reset_font_size_to_default
+Ctrl-MouseMiddle            reset_font_size_to_default
+
+F8                          go_to_next_build_error
+Ctrl-F8                     go_to_next_build_error_on_the_side
+Shift-F8                    go_to_previous_build_error
+Shift-Ctrl-F8               go_to_previous_build_error_on_the_side
+
+# Added after migration to version [6]
+{Shift}-Ctrl-M              jump_to_matching_bracket
+
+
+[[style]]
+
+theme: halogen
+
+[fonts]
+font:       default
+font_size:  14
+
+[colors]
+background0:                            15212AFF
+background1:                            10191FFF
+background2:                            18262FFF
+background3:                            1A2831FF
+background4:                            21333FFF
+
+# NOTE: for Jai region_scope colors define background colors for blocks of code that fall into those scopes,
+#       so make sure to override those as well if you change the background.
+#       Those regions are likely to be used for languages other than Jai in the future
+region_scope_export:                    15212AFF
+region_scope_file:                      131C22FF
+region_scope_module:                    1A2831FF
+region_header:                          1A5152FF
+region_success:                         226022FF
+region_warning:                         986032FF
+region_error:                           772222FF
+region_heredoc:                         090e12FF
+
+selection_active:                       1C4449FF
+selection_inactive:                     1C44497F
+selection_highlight:                    FCEDFC26
+search_result_active:                   8E772EFF
+search_result_inactive:                 FCEDFC26
+scrollbar:                              33CCCC19
+scrollbar_hover:                        33CCCC4C
+scrollbar_background:                   10191F4C
+cursor:                                 26B2B2FF
+cursor_inactive:                        196666FF
+paste_animation:                        1C4449FF
+splitter:                               21333FFF
+splitter_hover:                         1C4449FF
+letter_highlight:                       599999FF
+list_cursor_lite:                       33CCCC19
+list_cursor:                            33CCCC4C
+shadow_dark:                            0E161C7F
+shadow_transparent:                     0E161C00
+text_input_label:                       3B4450FF
+char_under_cursor:                      FFFFFFFF
+
+ui_default:                             BFC9DBFF
+ui_dim:                                 87919DFF
+ui_neutral:                             4C4C4CFF
+ui_warning:                             F8AD34FF
+ui_warning_dim:                         986032FF
+ui_error:                               772222FF
+ui_error_bright:                        FF0000FF
+ui_success:                             227722FF
+
+build_panel_background:                 1A2831FF
+build_panel_scrollbar:                  33CCCC19
+build_panel_scrollbar_hover:            33CCCC4C
+build_panel_scrollbar_background:       10191F4C
+build_panel_title_bar:                  1C303AFF
+
+code_default:                           BFC9DBFF
+code_invalid:                           FF0000FF
+
+code_string_literal:                    D4BC7DFF
+code_multiline_string:                  D4BC7DFF
+code_raw_string:                        D4BC7DFF
+code_char_literal:                      D4BC7DFF
+
+code_identifier:                        BFC9DBFF
+code_note:                              E0AD82FF
+code_number:                            D699B5FF
+
+code_error:                             FF0000FF
+code_warning:                           E4D97DFF
+code_highlight:                         E4D97DFF
+
+code_comment:                           87919DFF
+code_multiline_comment:                 87919DFF
+
+code_operation:                         E0AD82FF
+code_punctuation:                       BFC9DBFF
+
+code_keyword:                           E67D74FF
+code_type:                              82AAA3FF
+code_value:                             D699B5FF
+code_modifier:                          E67D74FF
+code_attribute:                         E67D74FF
+code_enum_variant:                      BFC9DBFF
+code_macro:                             E0AD82FF
+code_function:                          D0C5A9FF
+
+code_builtin_variable:                  D699B5FF
+code_builtin_function:                  E0AD82FF
+code_builtin_exception:                 E0AD82FF
+
+code_directive:                         E67D74FF
+code_directive_modifier:                E67D74FF
+
+code_header:                            E67D74FF
+code_header2:                           E0AD82FF
+code_header3:                           E0AD82FF
+code_header4:                           E0AD82FF
+code_header5:                           E0AD82FF
+code_header6:                           E0AD82FF
+
+# Added after migration to version [9]
+ruler:                                  196666FF
+bracket_highlight:                      FCEDFC26
+indent_guide:                           FCEDFC26
