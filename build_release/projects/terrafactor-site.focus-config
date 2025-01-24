@@ -51,3 +51,7 @@ key_binding:            F1
 #       Some sections, such as [[workspace]] or [[build commands]], will completely replace those in the global config,
 #       while other sections such as [[keymap]] or [[style]] will try to merge with the corresponding sections in the global
 #       config, allowing to override only some of the keys or colors.
+
+[[style]]
+
+theme: default
