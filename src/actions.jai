@@ -120,6 +120,11 @@ ACTIONS_COMMON :: string.[
     "go_to_next_build_error_on_the_side",
     "go_to_previous_build_error",
     "go_to_previous_build_error_on_the_side",
+
+    "focus_next_ui_element",
+    "focus_previous_ui_element",
+
+    "open_entry_in_place",
 ];
 
 ACTIONS_EDITORS :: #run arrays_concat(ACTIONS_COMMON, string.[
@@ -151,6 +156,7 @@ ACTIONS_EDITORS :: #run arrays_concat(ACTIONS_COMMON, string.[
     "save",
     "save_as",
     "save_all",
+    "open_file_directory",
     "move_current_file",
     "delete_current_file",
     "toggle_comment",
@@ -195,7 +201,6 @@ ACTIONS_EDITORS :: #run arrays_concat(ACTIONS_COMMON, string.[
 ]);
 
 ACTIONS_OPEN_FILE_DIALOG :: #run arrays_concat(ACTIONS_COMMON, string.[
-    "open_entry_in_place",
     "open_entry_on_the_side",
     "open_entry_on_the_left",
     "open_entry_on_the_right",
@@ -205,15 +210,12 @@ ACTIONS_OPEN_FILE_DIALOG :: #run arrays_concat(ACTIONS_COMMON, string.[
 ]);
 
 ACTIONS_SEARCH_DIALOG :: #run arrays_concat(ACTIONS_COMMON, string.[
-    "open_entry_in_place",
     "open_entry_on_the_side",
     "open_entry_on_the_left",
     "open_entry_on_the_right",
     "toggle_case_sensitive",
     "toggle_whole_word",
     "toggle_regex_search",
-    "go_to_next_input",
-    "go_to_previous_input",
 ]);
 
 

@@ -190,6 +190,13 @@ get_next_token :: (using tokenizer: *Jai_Tokenizer) -> Token {
 parse_identifier :: (using tokenizer: *Jai_Tokenizer, token: *Token) {
     token.type = .identifier;
 
+    // A hack to be able to safely release temp after this point
+    // (because we do need to keep any regions this function might add in the temporary storage)
+    array_reserve(*regions, regions.count + 1);
+
+    reset_herestring_state := true;
+
+    auto_release_temp();
     identifier_str := read_identifier_string_tmp(tokenizer);
 
     // Maybe it's a keyword
@@ -200,7 +207,7 @@ parse_identifier :: (using tokenizer: *Jai_Tokenizer, token: *Token) {
 
     // Check for here-string and directive modifiers
     prev, before_prev := last_tokens[1], last_tokens[0];
-    if prev.type == .directive && prev.directive == .directive_string {
+    if (prev.type == .directive && prev.directive == .directive_string) || maybe_herestring {
         // Here-string
         token.type = .multiline_string;
         start := cast(s32) (t - buf.data);
@@ -235,16 +242,21 @@ parse_identifier :: (using tokenizer: *Jai_Tokenizer, token: *Token) {
                     case .directive_run;            is_modifier = array_find(string.["stallable"], identifier_str);
                     case .directive_library;        is_modifier = array_find(string.["no_static_library", "no_dll", "system", "link_always"], identifier_str);
                     case .directive_system_library; is_modifier = array_find(string.["no_static_library", "no_dll", "link_always"], identifier_str);
+                    case .directive_string;         is_modifier = array_find(string.["cr"], identifier_str);
+                                                    if is_modifier { maybe_herestring = true; reset_herestring_state = false; }
                 }
             case .keyword;
                 if before_prev.keyword == {
-                    case .kw_using;   is_modifier = array_find(string.["only", "except", "map"], identifier_str);
-                    case .kw_cast;    is_modifier = array_find(string.["no_check", "trunc", "force"], identifier_str);
-                    case .kw_xx;      is_modifier = array_find(string.["no_check", "trunc", "force"], identifier_str);
+                    case .kw_using;         is_modifier = array_find(string.["only", "except", "map"], identifier_str);
+                    case .kw_cast;          is_modifier = array_find(string.["no_check", "trunc", "force"], identifier_str);
+                    case .kw_xx;            is_modifier = array_find(string.["no_check", "trunc", "force"], identifier_str);
+                    case .kw_push_context;  is_modifier = array_find(string.["defer_pop"], identifier_str);
                 }
         }
         if is_modifier then token.type = .directive_modifier;
     }
+
+    if reset_herestring_state then maybe_herestring = false;
 }
 
 parse_number :: (using tokenizer: *Jai_Tokenizer, token: *Token) {
@@ -307,6 +319,11 @@ parse_directive :: (using tokenizer: *Jai_Tokenizer, token: *Token) {
 
     start_offset := cast(s32) (start_t - buf.data);
 
+    // A hack to be able to safely release temp after this point
+    // (because we do need to keep any regions this function might add in the temporary storage)
+    array_reserve(*regions, regions.count + 1);
+
+    auto_release_temp();
     directive_str := read_identifier_string_tmp(tokenizer);
 
     // Check if it's one of the existing directives
@@ -654,6 +671,8 @@ Jai_Tokenizer :: struct {
     current_scope_id := -1;
 
     last_tokens: [2] Token;
+
+    maybe_herestring := false;  // to support highlighting #string,cr END ... END
 }
 
 Token :: struct {

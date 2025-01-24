@@ -39,7 +39,7 @@ highlight_line_with_cursor:                         false
 highlight_matching_brackets:                        false
 show_paste_effect:                                  true
 disable_file_open_close_animations:                 false
-strip_trailing_whitespace_on_save:                  except_lines_with_cursor
+strip_trailing_whitespace_on_save:                  except_lines_with_cursor  # options: all, except_lines_with_cursor, disabled
 smooth_scrolling:                                   true
 scroll_beyond_last_line:                            true
 double_shift_to_search_in_workspace:                false
@@ -78,6 +78,13 @@ status_bar_show_cursors_off_screen:                 true
 status_bar_show_line_col:                           true
 status_bar_show_indentation:                        true
 status_bar_show_selected_text_length:               false
+
+show_scrollbar_marks:                               true
+scrollbar_width_scale:                              1.0
+scrollbar_min_opacity:                              0.0   # if you want the scrollbar to be always visible, set this to 1.0
+scrollbar_max_opacity:                              1.0
+scrollbar_fade_in_sensitivity:                      10.0  # controls when the scrollbar appears as the mouse pointer gets close
+scrollbar_fade_out_delay_seconds:                   2.0   # how long the scrollbar stays visible after scrolling
 
 # NOTE: some settings can be specified for a subset of files, based on their language or a wildcard,
 # for example:
@@ -221,7 +228,6 @@ Opt-Cmd-Shift-N                 open_another_editor_instance
 
 [open file dialog]
 
-Enter                           open_entry_in_place
 Cmd-1                           open_entry_on_the_left
 Cmd-Enter                       open_entry_on_the_side
 Cmd-2                           open_entry_on_the_right
@@ -234,7 +240,6 @@ Backspace                       pop_directory
 
 [search dialog]
 
-Enter                           open_entry_in_place
 Cmd-Enter                       open_entry_on_the_side
 Cmd-1                           open_entry_on_the_left
 Cmd-2                           open_entry_on_the_right
@@ -244,9 +249,6 @@ Shift-Enter                     move_up  # an alternative way to move
 Cmd-Opt-C                       toggle_case_sensitive
 Cmd-Opt-W                       toggle_whole_word
 Cmd-Opt-R                       toggle_regex_search
-
-Tab                             go_to_next_input
-Shift-Tab                       go_to_previous_input
 
 [common]
 
@@ -290,6 +292,11 @@ Escape                          escape  # combines close_dialog and remove_addit
 Cmd-Shift-L                     toggle_expand
 
 Cmd-B                           build_panel_toggle
+
+Enter                           open_entry_in_place
+
+Tab                             focus_next_ui_element
+Shift-Tab                       focus_previous_ui_element
 
 # Ctrl-Cmd-F will always toggle fullscreen on macOS (like most other apps), but you can uncomment this to use something else.
 # F11                             toggle_fullscreen

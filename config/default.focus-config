@@ -40,7 +40,7 @@ highlight_matching_brackets:                        false
 show_paste_effect:                                  true
 disable_file_open_close_animations:                 false
 double_shift_to_search_in_workspace:                false
-strip_trailing_whitespace_on_save:                  except_lines_with_cursor
+strip_trailing_whitespace_on_save:                  except_lines_with_cursor  # options: all, except_lines_with_cursor, disabled
 smooth_scrolling:                                   true
 scroll_beyond_last_line:                            true
 line_height_scale_percent:                          120
@@ -82,6 +82,13 @@ status_bar_show_cursors_off_screen:                 true
 status_bar_show_line_col:                           true
 status_bar_show_indentation:                        true
 status_bar_show_selected_text_length:               false
+
+show_scrollbar_marks:                               true
+scrollbar_width_scale:                              1.0
+scrollbar_min_opacity:                              0.0   # if you want the scrollbar to be always visible, set this to 1.0
+scrollbar_max_opacity:                              1.0
+scrollbar_fade_in_sensitivity:                      10.0  # controls when the scrollbar appears as the mouse pointer gets close
+scrollbar_fade_out_delay_seconds:                   2.0   # how long the scrollbar stays visible after scrolling
 
 # NOTE: some settings can be specified for a subset of files, based on their language or a wildcard,
 # for example:
@@ -239,7 +246,6 @@ Ctrl-Shift-Alt-N            open_another_editor_instance
 
 [open file dialog]
 
-Enter                       open_entry_in_place
 Ctrl-Enter                  open_entry_on_the_side
 Ctrl-1                      open_entry_on_the_left
 Ctrl-2                      open_entry_on_the_right
@@ -252,7 +258,6 @@ Backspace                   pop_directory
 
 [search dialog]
 
-Enter                       open_entry_in_place
 Ctrl-Enter                  open_entry_on_the_side
 Ctrl-1                      open_entry_on_the_left
 Ctrl-2                      open_entry_on_the_right
@@ -262,9 +267,6 @@ Shift-Enter                 move_up  # an alternative way to move
 Alt-C                       toggle_case_sensitive
 Alt-W                       toggle_whole_word
 Alt-R                       toggle_regex_search
-
-Tab                         go_to_next_input
-Shift-Tab                   go_to_previous_input
 
 
 [common]
@@ -312,6 +314,11 @@ Ctrl-Shift-L                toggle_expand
 Ctrl-B                      build_panel_toggle
 
 F11                         toggle_fullscreen
+
+Enter                       open_entry_in_place
+
+Tab                         focus_next_ui_element
+Shift-Tab                   focus_previous_ui_element
 
 # {Shift}- means shift is optional, the key combination will still be matched.
 # NOTE: in this editor the Shift key is hard-coded to extend selection when held

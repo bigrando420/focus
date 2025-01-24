@@ -61,7 +61,7 @@ execute_build_command :: (command: *Build_Command) {
 
     if command.clear_build_output_before_running then build_clear_output();
 
-    last_command_result = .{};
+    last_command_result = .{};  // this will clear build_errors among other things
 
     print_to_output_panel_from_main_thread(tprint("%\n", command.name), mark_as = .header);
 
@@ -91,8 +91,6 @@ execute_build_command :: (command: *Build_Command) {
     } else if !build_panel_is_shown {
         add_success_message("Running [%]…", work.name, dismiss_in_seconds = 3,, allocator = focus_allocator);
     }
-
-    work.current_build_buffer_offset = open_buffers[build_buffer_id].bytes.count;
 
     add_work(*thread_group, work);
     running_command = work.name;  // work.name should live until a new command is kicked off
@@ -139,15 +137,11 @@ build_system_update :: () {
     // Print to build output panel, if we have anything to print
     {
         lock(*build_mutex);
-        defer unlock(*build_mutex);
-
         output := builder_to_string(*stdout);
-        defer free(output);
-        print_to_output_panel_from_main_thread(output);
+        unlock(*build_mutex);
 
-        error_output := builder_to_string(*stderr);
-        defer free(error_output);
-        print_to_output_panel_from_main_thread(error_output);
+        print_to_output_panel_from_main_thread(output);
+        free(output);
     }
 
     // Check if a command has finished executing
@@ -200,10 +194,10 @@ build_system_update :: () {
                     }
             }
 
-            if last_command_result.build.finished then parse_build_errors(finished_command.error_regex);
+            if result.finished then parse_errors_in_failed_command_output(finished_command.error_regex, result);
         }
 
-        // Print elapsed time
+        // Print the end message and elapsed time
         if last_command_result.build.finished && last_command_result.run.finished {
             message = tprint("%  [Build took %s]", message, formatFloat(last_command_result.build.elapsed_seconds, trailing_width = 3, zero_removal = .NO));
             message = tprint("%  [Run took %s]",   message, formatFloat(last_command_result.run.elapsed_seconds,   trailing_width = 3, zero_removal = .NO));
@@ -213,7 +207,6 @@ build_system_update :: () {
                 message = tprint("%  [Elapsed: %s]", message, formatFloat(command.elapsed_seconds, trailing_width = 3, zero_removal = .NO));
             }
         }
-
         print_to_output_panel_from_main_thread(tprint("%\n", message), mark_as = kind, add_newline_if_missing = true);
 
         if kind == .success {
@@ -350,7 +343,7 @@ go_to_build_error_under_cursor :: (cursor: Cursor, placement: Editor_Placement =
 
 get_error_id_under_cursor :: (cursor: Cursor) -> error_id: s64 {
     for last_command_result.build_errors {
-        if it.file_output_range.start <= cursor.pos && cursor.pos <= it.file_output_range.end return it_index;
+        if it.file_path_location.start <= cursor.pos && cursor.pos <= it.file_path_location.end return it_index;
     }
     return -1;
 }
@@ -418,22 +411,17 @@ build_threadproc :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thre
         header := tprint("> %\n", command.build_command);
         write_output_from_build_thread(*stdout, header);
 
-        output_range := Offset_Range.{ start = xx (command.current_build_buffer_offset + header.count) };
-
-        result, timeout_reached, num_bytes_printed, elapsed_seconds := run_command_while_monitoring_output(
+        result, timeout_reached, elapsed_seconds := run_command_while_monitoring_output(
             ..break_command_into_strings(command.build_command),
             working_directory = command.build_working_dir,
             timeout_ms = command.timeout_in_seconds * 1000,
         );
-
-        output_range.end = output_range.start + num_bytes_printed;
 
         last_command_result.build_working_dir = copy_string(command.build_working_dir);
         last_command_result.build = .{
             finished = true,
             timeout_reached = timeout_reached,
             process_result = result,
-            output_range = output_range,
             elapsed_seconds = elapsed_seconds,
         };
 
@@ -447,22 +435,15 @@ build_threadproc :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thre
         if command.build_command then header = tprint("\n%", header);
         write_output_from_build_thread(*stdout, header);
 
-        current_buffer_offset := command.current_build_buffer_offset;
-        if last_command_result.build.finished then current_buffer_offset = last_command_result.build.output_range.end;
-        output_range := Offset_Range.{ start = xx (current_buffer_offset + header.count) };
-
-        result, timeout_reached, num_bytes_printed, elapsed_seconds := run_command_while_monitoring_output(
+        result, timeout_reached, elapsed_seconds := run_command_while_monitoring_output(
             ..break_command_into_strings(command.run_command),
             working_directory = command.run_working_dir,
         );
-
-        output_range.end = output_range.start + num_bytes_printed;
 
         last_command_result.run = .{
             finished = true,
             timeout_reached = timeout_reached,
             process_result = result,
-            output_range = output_range,
             elapsed_seconds = elapsed_seconds,
         };
     }
@@ -495,6 +476,8 @@ print_to_output_panel_from_main_thread :: (s: string, mark_as: Buffer_Region.Kin
     // Maybe forget some bytes at the beginning
     if buffer.bytes.count > MAX_BUILD_OUTPUT_BUFFER_SIZE {
         bytes_to_forget := cast(s32) (buffer.bytes.count - MAX_BUILD_OUTPUT_BUFFER_SIZE);
+        bytes_to_forget = to_valid_utf8_char_offset(buffer.bytes, bytes_to_forget);  // don't cut utf8 chars in the middle
+        assert(bytes_to_forget >= 0, "Error when trying to forget bytes in the build output. This is a bug.");
 
         lock(*buffer.content_lock);
         resize(*buffer.tokens, buffer.bytes.count);  // resize first before we delete
@@ -503,8 +486,9 @@ print_to_output_panel_from_main_thread :: (s: string, mark_as: Buffer_Region.Kin
         unlock(*buffer.content_lock);
 
         for * last_command_result.build_errors {
-            it.file_output_range.start -= bytes_to_forget;
-            it.file_output_range.end   -= bytes_to_forget;
+            it.file_path_location.start -= bytes_to_forget;
+            it.file_path_location.end   -= bytes_to_forget;
+            if it.file_path_location.start < 0 || it.file_path_location.end < 0 then remove it;  // don't bother sorting afterwards because this should almost never happen
         }
 
         for * region : buffer.regions {
@@ -611,29 +595,37 @@ check_working_dirs :: (using work: *Build_Thread_Work) {
     }
 }
 
-parse_build_errors :: (error_regex: string) {
-    using last_command_result;
+parse_errors_in_failed_command_output :: (error_regex: string, command: Command_Result) {
+    if !error_regex { last_command_result.error_regex_status = .missing; return; }
 
-    if !error_regex { error_regex_status = .missing; return; }
-
-    assert(build.finished);
-    assert(!build_errors);  // we should've cleared it by now
+    assert(command.finished);
+    assert(!last_command_result.build_errors);  // we should've cleared it by now
 
     push_allocator(get_pool_allocator());
 
     editor, buffer := get_build_editor_and_buffer();
-    output_range := build.output_range;
-    if output_range.start < 0 || output_range.end <= output_range.start || output_range.end > buffer.bytes.count return;
+
+    // Get the output range of the last command:
+    // - first by checking the last header region,
+    // - but if it's missing because it's shifted away by printing too much, fall back to 0
+    // NOTE: we used to save output ranges of every command, but that wasn't very robust when the build output limit was reached
+    output_range := Offset_Range.{ start = 0, end = buffer.bytes.count };
+    for #v2 < buffer.regions {
+        if it.kind == .header {
+            output_range.start = it.range.end;
+            break;
+        }
+    }
     build_output := cast(string) to_view(buffer.bytes, output_range.start, output_range.end - output_range.start);
 
     compiled_regex, valid := re.compile(error_regex, .LikePerl & ~.OneLine);
     if !valid {
         log_error("Unable to parse build errors because error_regex is invalid: %\n", error_regex);
-        error_regex_status = .failed_to_compile;
+        last_command_result.error_regex_status = .failed_to_compile;
         return;
     }
 
-    error_regex_status = .ok;
+    last_command_result.error_regex_status = .ok;
 
     while true {
         matched, captures := re.match(build_output, compiled_regex);
@@ -656,13 +648,13 @@ parse_build_errors :: (error_regex: string) {
         build_error := Build_Error.{ file = copy_string(file), message = copy_string(msg) };
         path_overwrite_separators(build_error.file, #char "/");
 
-        build_error.file_output_range = .{
+        build_error.file_path_location = .{
             start = cast(s32)(file.data - buffer.bytes.data),
             end   = cast(s32)(file.data - buffer.bytes.data + file.count),
         };
 
         // Highlight file paths for easier recognition that an error has been detected
-        manually_mark_range_as_token(buffer, build_error.file_output_range, xx Token_Type.highlight);
+        manually_mark_range_as_token(buffer, build_error.file_path_location, xx Token_Type.highlight);
 
         type := table_find_or_default(*named_captures, "type");
         if type {
@@ -702,17 +694,17 @@ parse_build_errors :: (error_regex: string) {
             build_error.error_info_end_offset   = xx (max_s64_in_array(ends)   - cast(s64) buffer.bytes.data);
         }
 
-        array_add(*build_errors, build_error);
+        array_add(*last_command_result.build_errors, build_error);
     }
 
     // Maybe highlight code samples.
-    for error : build_errors {
+    for error : last_command_result.build_errors {
         lang := get_lang_from_path(error.file);
 
         // Assume that code samples might be somewhere in between the error data we've parsed
         start := error.error_info_end_offset;
         end   := buffer.bytes.count;
-        if it_index < build_errors.count - 1 then end = build_errors[it_index + 1].error_info_start_offset;
+        if it_index < last_command_result.build_errors.count - 1 then end = last_command_result.build_errors[it_index + 1].error_info_start_offset;
 
         if end < start continue;  // TODO: investigate why this might be happening before we implement other languages. See https://github.com/focus-editor/focus/issues/379
 
@@ -771,8 +763,8 @@ go_to_current_build_error :: (placement: Editor_Placement = .in_place, show_erro
     {
         editor, buffer := get_build_editor_and_buffer();
         cursor := leave_only_original_cursor(editor);
-        cursor.sel = build_error.file_output_range.start;
-        cursor.pos = build_error.file_output_range.end;
+        cursor.sel = build_error.file_path_location.start;
+        cursor.pos = build_error.file_path_location.end;
         if buffer.dirty then rescan_for_lines(buffer);
         select_line(cursor, buffer);
         editor.cursor_moved = .jumped;
@@ -835,6 +827,7 @@ last_command_result: struct {
 
     build_working_dir: string;  // for prepending to relative error paths
     build_errors: [..] Build_Error;  // allocated from pool
+    output_range: Offset_Range;  // will contain the output range of the last command (either build or run), to be used in error parsing
     error_regex_status: enum { ok; failed_to_compile; missing; } = .ok;  // for better error messages
     current_build_error_id := -1;
 };
@@ -846,21 +839,19 @@ memory_pool: Flat_Pool;
 // which the main thread will pick up at its convenience.
 // We never write to buffers from threads, because if we did, a lot of code would have to be littered with locks.
 stdout: String_Builder;
-stderr: String_Builder;
 build_mutex: Mutex;
 
 Build_Panel_Position :: enum { left; right; }
 
 Build_Thread_Work :: struct {
     using command: Build_Command;
-    current_build_buffer_offset: s64;  // the size of the build buffer at the time the command is submitted
+    // NOTE: there used to be more work data here which was later removed. Keeping it like this in case we need to add more data later
 }
 
 Command_Result :: struct {
     finished:        bool;
     timeout_reached: bool;
     process_result:  Process_Result;
-    output_range:    Offset_Range;
     elapsed_seconds: float64;
 }
 
@@ -870,7 +861,7 @@ Build_Error :: struct {
     line: s32 = -1;
     col:  s32 = -1;
     type: enum { error; warning; info; } = .error;
-    file_output_range: Offset_Range;  // where in the build output the file path is (for double-click support)
+    file_path_location: Offset_Range;  // where in the build output the file path is (for double-click support)
 
     error_info_start_offset: s32;  // for code highlighting. We assume code might be in between the error info we've parsed
     error_info_end_offset:   s32;
@@ -879,23 +870,24 @@ Build_Error :: struct {
 MAX_BUILD_OUTPUT_BUFFER_SIZE :: 2 * 1024 * 1024;
 
 
-#scope_file
+DEBUG_BUILD_ERRORS :: false;
+
 
 // Adapted the run_command function from the Process module to allow for monitoring output
 
-run_command_while_monitoring_output :: (args: .. string, working_directory := "", timeout_ms := -1, arg_quoting := Process_Argument_Quoting.QUOTE_IF_NEEDED) -> (process_result: Process_Result, timeout_reached := false, num_bytes_printed: s32 = 0, elapsed_seconds: float64 = 0) {
+run_command_while_monitoring_output :: (args: .. string, working_directory := "", timeout_ms := -1, arg_quoting := Process_Argument_Quoting.QUOTE_IF_NEEDED) -> (process_result: Process_Result, timeout_reached := false, elapsed_seconds: float64 = 0) {
     process  := *running_process;  // accessing a global! NOTE: this is assuming we only ever have one running command
     lock(*build_mutex);
     process.* = Process.{};
     unlock(*build_mutex);
 
-    launched := create_process(process, .. args, working_directory, capture_and_return_output = true, arg_quoting = arg_quoting);
+    launched := create_process_with_single_output_pipe(process, .. args, working_directory, arg_quoting = arg_quoting);
     if !launched {
         executable := args[0];
         if is_absolute_path(executable) return .{type = .FAILED_TO_LAUNCH};
         // Retry with an absolute path if possible
         args[0] = tprint("%/%", working_directory, executable);
-        launched := create_process(process, .. args, working_directory, capture_and_return_output = true, arg_quoting = arg_quoting);
+        launched := create_process_with_single_output_pipe(process, .. args, working_directory, arg_quoting = arg_quoting);
         if !launched return .{type = .FAILED_TO_LAUNCH};
     }
     defer {
@@ -906,27 +898,19 @@ run_command_while_monitoring_output :: (args: .. string, working_directory := ""
 
     timeout_reached := false;
 
-    // A string builder to buffer error output so that we can print it out at the end
-    error_builder: String_Builder;
-
-    num_bytes_printed := 0;
-
     start_time := current_time_monotonic();
     remaining_timeout_ms := timeout_ms;
 
     while true {
-        output_buffer, error_buffer: [4 * 4096] u8;
-        success, num_output_bytes, num_error_bytes := read_from_process(process, output_buffer, error_buffer, remaining_timeout_ms);
+        output_buffer: [4 * 4096] u8;
+        success, num_output_bytes := read_from_process(process, output_buffer, remaining_timeout_ms);
 
         if num_output_bytes {
             output_str := to_string(output_buffer.data, num_output_bytes);
             remove_crlf_in_place(*output_str);
             write_output_from_build_thread(*stdout, output_str);
             platform_wake_up_main_thread();
-            num_bytes_printed += output_str.count;
         }
-
-        if num_error_bytes then append(*error_builder, to_string(error_buffer.data, num_error_bytes));
 
         if !success {
             log_error("Could not read output of command \"%\"", get_quoted_command_string(args));
@@ -943,33 +927,27 @@ run_command_while_monitoring_output :: (args: .. string, working_directory := ""
                 timeout_reached = true;
                 success := kill_process(process);
                 if !success {
-                    error_code, error_string := System.get_error_value_and_string();
+                    error_code, error_string := get_error_value_and_string();
                     log_error("Could not kill child for command \"%\": % %", get_quoted_command_string(args), error_code, error_string);
                 }
                 break;
             }
         }
 
-        if process.output.eof && process.error.eof break;
+        if process.output.eof break;
     }
 
     elapsed_seconds := to_float64_seconds(current_time_monotonic() - start_time);
 
-    // Print error output
-    error_str := builder_to_string(*error_builder);
-    remove_crlf_in_place(*error_str);
-    write_output_from_build_thread(*stderr, error_str);
-    num_bytes_printed += error_str.count;
-
     success, process_result := get_process_result(process);
     if !success {
-        error_code, error_string := System.get_error_value_and_string();
+        error_code, error_string := get_error_value_and_string();
         log_error("Could not get process result for command \"%\": % %", get_quoted_command_string(args), error_code, error_string);
         kill_process(process);
         process_result = .{type = .EXITED, exit_code = 1};
     }
 
-    return process_result, timeout_reached, cast(s32) num_bytes_printed, elapsed_seconds;
+    return process_result, timeout_reached, elapsed_seconds;
 }
 
 write_output_from_build_thread :: (builder: *String_Builder, s: string) {
@@ -980,140 +958,7 @@ write_output_from_build_thread :: (builder: *String_Builder, s: string) {
 }
 
 #if OS == .WINDOWS {
-    // A copy of the standard create_process function from the Process module, which passes CREATE_NO_WINDOW to avoid creating a cmd window
-    create_process :: (process: *Process, args: .. string, working_directory := "", capture_and_return_output := false, arg_quoting := Process_Argument_Quoting.QUOTE_IF_NEEDED, kill_process_if_parent_exits := true) -> success: bool {
-        startup_info: STARTUPINFOW;
-        startup_info.cb = size_of(type_of(startup_info));
-
-        child_input_read:   HANDLE;
-        child_output_write: HANDLE;
-        child_error_write:  HANDLE;
-
-        if capture_and_return_output {
-            success: bool;
-            success, child_input_read = init_named_pipe_pair(*process.input, is_input = true);
-            success, child_output_write = init_named_pipe_pair(*process.output, is_input = false);
-            success, child_error_write = init_named_pipe_pair(*process.error, is_input = false);
-
-            startup_info.dwFlags = STARTF_USESTDHANDLES;
-            startup_info.hStdInput = child_input_read;
-            startup_info.hStdOutput = child_output_write;
-            startup_info.hStdError  = child_error_write;
-            // startup_info.hStdInput  = GetStdHandle(STD_INPUT_HANDLE);
-            // startup_info.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-            // startup_info.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
-        }
-
-        defer {
-            if capture_and_return_output {
-                // Close our copies of the write handles (so that we receive EOF when the child closes them too)
-                CloseHandle(child_input_read);
-                CloseHandle(child_output_write);
-                CloseHandle(child_error_write);
-            }
-        }
-
-        args_string : string = ---;
-        if #complete arg_quoting == {
-            case .QUOTE_IF_NEEDED;
-                args_string = get_quoted_command_string(args);
-            case .NEVER_QUOTE;
-                args_string = join(..args, separator=" ");
-        }
-
-        if kill_process_if_parent_exits {
-            // Create a "Job Object" so that the process gets cleaned up if the parent process (=we) exits for some reason.
-            // If we don't do this, the child might live on.
-            process.job_handle = CreateJobObjectA(null, null);
-            if !process.job_handle {
-                error_value, error_string := System.get_error_value_and_string();
-                log_error("Could not create Windows Job Object: % %", error_value, error_string);
-                process.job_handle = INVALID_HANDLE_VALUE;
-                deinit(process);
-                return false;
-            }
-
-            job_info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION;
-            job_info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            success := SetInformationJobObject(process.job_handle, .ExtendedLimitInformation, *job_info, size_of(type_of(job_info)));
-            if !success {
-                error_value, error_string := System.get_error_value_and_string();
-                log_error("Could not configure Windows Job Object: % %", error_value, error_string);
-                deinit(process);
-                return false;
-            }
-        }
-
-        // The first argument to CreateProcessW is null, because that is what causes it to
-        // search the PATH environment variable to find the thing to run.
-
-        // Do not use CREATE_NO_WINDOW in dwCreationFlags, because if you do, it will mysteriously make the process not inherit
-        // console handles. The documentation did not appear to say anything about this, but then again
-        // the documentation is contradictory and confusing. Okay, well, if you dig into Process Creation Flags
-        // on some other page, it tells you this is not a good idea. Yeah well. Okay.
-
-        success := CreateProcessW(null, utf8_to_wide_new(args_string,, temp), null, null, cast(BOOL) 1, CREATE_NO_WINDOW, null, utf8_to_wide_new(working_directory,, temp), *startup_info, *process.info);
-        if !success {
-            error_value, error_string := System.get_error_value_and_string();
-            log_error("While running the command: '%', we were unable to create the process. Error code: %, description: %\n",
-                      get_quoted_command_string(args), error_value, error_string);
-            deinit(process);
-            return false;
-        }
-
-        if kill_process_if_parent_exits {
-            success = AssignProcessToJobObject(process.job_handle, process.info.hProcess);
-            if !success {
-                error_value := GetLastError();
-
-                // Check if the program exited so quickly that we couldn't assign it fast enough:
-                already_done := false;
-                if error_value == ERROR_ACCESS_DENIED {
-                    success, result := get_process_result(process, 0);
-                    if result.type == .EXITED already_done = true;
-                }
-
-                if !already_done {
-                    error_string := System.get_error_string(error_value);
-                    log_error("Could not assign process % to Windows Job Object %: % %", process.info.hProcess, process.job_handle, error_value, error_string);
-                    // We could decide to not fail in this case, but this might leave dangling processes around.
-                    // The Right Thing(tm) depends on the exact error, so we will make these decisions whenever we discover a new error condition.
-                    // -rluba 2022-12-06
-                    deinit(process);
-                    return false;
-                }
-            }
-        }
-
-        if capture_and_return_output {
-            success := issue_read(*process.output);
-            if !success {
-                error_code, error_string := System.get_error_value_and_string();
-                log_error("Couldn't start overlapped IO for standard output: % %", error_code, error_string);
-                deinit(process);
-                return false;
-            }
-
-            success = issue_read(*process.error);
-            if !success {
-                error_code, error_string := System.get_error_value_and_string();
-                log_error("Couldn't start overlapped IO for standard error: % %", error_code, error_string);
-                deinit(process);
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    issue_read :: (pipe: *Process.Pipe) -> bool {
-        result := ReadFile(pipe.handle, null, 0, null, pipe.overlapped); // :ProcessPointers
-        if result == 0 && GetLastError() != ERROR_IO_PENDING    return false;
-
-        return true;
-    }
+    #load "build_system_windows.jai";
+} else #if OS_IS_UNIX {
+    #import,file "build_system_unix.jai";
 }
-
-System :: #import "System";
-
-DEBUG_BUILD_ERRORS :: false;

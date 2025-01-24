@@ -324,10 +324,6 @@ reload_workspace :: (automatic := false) {
         }
     }
 
-    // Refresh file-backed buffers from disk.
-    // At this point the user either saved all buffers or told us to discard unsaved changes
-    for buffer_id : buffers_to_refresh_from_disk  reload_from_disk(buffer_id, force = true);
-
     if !automatic then show_open_file_dialog(.search);
 
     init_build_system();  // must do after we've cleared editors and buffers
@@ -435,6 +431,7 @@ deinit_file_watcher :: () {
 file_list_threadproc :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_Continue_Status {
     reset(*scan_memory_pool);
     scan_pool_allocator := get_scan_pool_allocator();
+    table_reset(*file_list_table);
 
     maybe_add_file_to_scan_list :: (file: *File_Visit_Info, userdata: Allocator) {
         if file.is_directory {
@@ -442,12 +439,12 @@ file_list_threadproc :: (group: *Thread_Group, thread: *Thread, work: *void) -> 
             return;
         }
         if file.is_symlink return;
+        if should_ignore_file(file.full_name, check_for_zeroes_if_needed = false) return;
 
-        // NOTE: not checking whether we should ignore the file here,
-        // because it may involve reading the file and checking for zeroes,
-        // and we'd rather it's done in threads (also if later we find there are no
-        // zeroes in the file then the file data will be in cache ready to use)
-        array_add(*files_to_scan, copy_string(file.full_name,, allocator=userdata));
+        full_path := copy_string(file.full_name,, allocator=userdata);
+        if table_find_pointer(*file_list_table, full_path) return;
+        array_add(*files_to_scan, full_path);
+        table_add(*file_list_table, full_path, true);
     }
 
     for project_dirs visit_files(it.path, recursive = true, scan_pool_allocator, maybe_add_file_to_scan_list, visit_directories = true);
@@ -460,7 +457,14 @@ directory_scan_threadproc :: (group: *Thread_Group, thread: *Thread, work: *void
 
     for path : << file_range {
         auto_release_temp();
-        if !should_ignore_file(path) then find_or_create_buffer(path);
+        if !should_ignore_file(path) {
+            buffer_id, created := find_or_create_buffer(path);
+            if buffer_id < 0 {
+                log_error("Couldn't open file because path is too long for %: \"%\"\n", OS, path);
+                continue;
+            }
+            if !created then reload_from_disk(buffer_id, force = true);  // when refreshing workspace we want up to date data from disk
+        }
     }
 
     return .CONTINUE;
@@ -589,6 +593,7 @@ scanner_thread_group: Thread_Group;
 
 scan_memory_pool: Flat_Pool;
 files_to_scan: [..] string;
+file_list_table: Table(string, bool);  // to avoid duplicates
 
 file_list_ready       := false;
 num_jobs_to_complete  := 0;

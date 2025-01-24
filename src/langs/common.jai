@@ -122,6 +122,13 @@ is_white_space :: inline (char : u8) -> bool #no_aoc {
     return cast,no_check(bool) result;
 }
 
+at_string :: (using tokenizer: *Tokenizer, a: string, $case_sensitive := true) -> bool {
+    if t + a.count > max_t  return false;
+    b := string.{ count = a.count, data = t };
+    #if case_sensitive  return equal(a, b);
+    else                return equal_nocase(a, b);
+}
+
 tokenize_c_like_lang_for_indentation :: (buffer: Buffer, $get_next_token: (*Tokenizer) -> $Token) -> [] Indentation_Token /* temp */ {
     tokens: [..] Indentation_Token;
     tokens.allocator = temp;
@@ -273,6 +280,10 @@ get_lang_from_name :: (lang_name: string) -> Buffer.Lang, found: bool {
         case "markdown";     return .Markdown,   true;
         case "batch";        return .Batch,      true;
         case "swift";        return .Swift,      true;
+        case "shell";        return .Shell,      true;
+        case "sh";           return .Shell,      true;
+        case "bash";         return .Shell,      true;
+        case "zsh";          return .Shell,      true;
 
         // case "focus_config"; return .Focus_Config, true;  // disabled for now
         // case "focus_theme";  return .Focus_Theme,  true;

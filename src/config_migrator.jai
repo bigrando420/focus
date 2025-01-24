@@ -33,6 +33,7 @@ maybe_migrate_config :: (name: string, file_data: string) -> migrated: bool, mod
             if begins_with(line, "[[") && ends_with(line, "]]") {
                 previous_section = current_section;
                 current_section = trim(line, " \t[]");
+                current_subsection = "";
                 just_entered_section = true;
 
                 if config_info.version < 5 {
@@ -68,7 +69,7 @@ maybe_migrate_config :: (name: string, file_data: string) -> migrated: bool, mod
                     setting_name, setting_value := break_by_spaces(line);
                     setting_name = trim_right(setting_name, ":");
 
-                    config_info.last_setting_offset = line_start_offset;
+                    if !current_subsection then config_info.last_setting_offset = line_start_offset;
                     table_set(*config_info.settings_present, setting_name, true);
 
                 case "style";
@@ -488,6 +489,14 @@ ADDED_SETTINGS :: Added_Setting.[
     .{ 11, "detect_indentation",                                 "true  # if true, existing files will be scanned to detect indentation, new files will use the `indent_using` and `tab_size` settings" },
     .{ 11, "status_bar_show_indentation",                        "true" },
     .{ 11, "status_bar_show_line_col",                           "true" },
+
+    .{ 15, "show_scrollbar_marks",                               "true" },
+
+    .{ 16, "scrollbar_width_scale",                              "1.0" },
+    .{ 16, "scrollbar_min_opacity",                              "0.0   # if you want the scrollbar to be always visible, set this to 1.0" },
+    .{ 16, "scrollbar_max_opacity",                              "1.0" },
+    .{ 16, "scrollbar_fade_in_sensitivity",                      "10.0  # controls when the scrollbar appears as the mouse pointer gets close" },
+    .{ 16, "scrollbar_fade_out_delay_seconds",                   "2.0   # how long the scrollbar stays visible after scrolling" },
 ];
 
 RENAMED_SETTINGS :: Renamed_Setting.[
@@ -612,6 +621,10 @@ ADDED_KEYBINDS :: Added_Keybind.[
     .{ 12, "editors", "move_right_through_word",                     "{Shift}-Meta-ArrowRight", "{Shift}-Ctrl-ArrowRight" },
     .{ 12, "editors", "delete_left_through_word",                    "{Shift}-Meta-Backspace",  "{Shift}-Ctrl-Backspace" },
     .{ 12, "editors", "delete_right_through_word",                   "{Shift}-Meta-Delete",     "{Shift}-Ctrl-Delete" },
+
+    .{ 14, "common", "open_entry_in_place",                         "Enter",                "Enter"     },
+    .{ 14, "common", "focus_next_ui_element",                       "Tab",                  "Tab"       },
+    .{ 14, "common", "focus_previous_ui_element",                   "Shift-Tab",            "Shift-Tab" },
 ];
 
 RENAMED_KEYBINDS :: Renamed_Keybind.[
@@ -632,6 +645,9 @@ RENAMED_KEYBINDS :: Renamed_Keybind.[
     .{ 12, "common",   "delete_word_right",                         "delete_right_by_character_type_fast" },
 
     .{ 13, "common",   "toggle_build_panel",                        "build_panel_toggle" },
+
+    .{ 14, "search dialog", "go_to_next_input",                     "focus_next_ui_element"     },
+    .{ 14, "search dialog", "go_to_previous_input",                 "focus_previous_ui_element" },
 ];
 
 #if !NO_OUTPUT_BUILD {
@@ -1189,6 +1205,9 @@ Ctrl-F8                     go_to_next_build_error_on_the_side
 Shift-F8                    go_to_previous_build_error
 Shift-Ctrl-F8               go_to_previous_build_error_on_the_side
 {Shift}-Ctrl-M              jump_to_matching_bracket
+Enter                       open_entry_in_place
+Tab                         focus_next_ui_element
+Shift-Tab                   focus_previous_ui_element
 
 [[settings]]
 
@@ -1227,6 +1246,12 @@ show_ruler_at_column:                            0
 detect_indentation:                              true  # if true, existing files will be scanned to detect indentation, new files will use the `indent_using` and `tab_size` settings
 status_bar_show_indentation:                     true
 status_bar_show_line_col:                        true
+show_scrollbar_marks:                            true
+scrollbar_width_scale:                           1.0
+scrollbar_min_opacity:                           0.0   # if you want the scrollbar to be always visible, set this to 1.0
+scrollbar_max_opacity:                           1.0
+scrollbar_fade_in_sensitivity:                   10.0  # controls when the scrollbar appears as the mouse pointer gets close
+scrollbar_fade_out_delay_seconds:                2.0   # how long the scrollbar stays visible after scrolling
 
 FOCUS_CONFIG
 
@@ -1297,6 +1322,9 @@ Ctrl-F8                     go_to_next_build_error_on_the_side
 Shift-F8                    go_to_previous_build_error
 Shift-Ctrl-F8               go_to_previous_build_error_on_the_side
 {Shift}-Ctrl-M              jump_to_matching_bracket
+Enter                       open_entry_in_place
+Tab                         focus_next_ui_element
+Shift-Tab                   focus_previous_ui_element
 
 [[settings]]
 
@@ -1334,6 +1362,12 @@ show_ruler_at_column:                            0
 detect_indentation:                              true  # if true, existing files will be scanned to detect indentation, new files will use the `indent_using` and `tab_size` settings
 status_bar_show_indentation:                     true
 status_bar_show_line_col:                        true
+show_scrollbar_marks:                            true
+scrollbar_width_scale:                           1.0
+scrollbar_min_opacity:                           0.0   # if you want the scrollbar to be always visible, set this to 1.0
+scrollbar_max_opacity:                           1.0
+scrollbar_fade_in_sensitivity:                   10.0  # controls when the scrollbar appears as the mouse pointer gets close
+scrollbar_fade_out_delay_seconds:                2.0   # how long the scrollbar stays visible after scrolling
 
 FOCUS_CONFIG
 
@@ -1386,6 +1420,9 @@ Ctrl-F8                     go_to_next_build_error_on_the_side
 Shift-F8                    go_to_previous_build_error
 Shift-Ctrl-F8               go_to_previous_build_error_on_the_side
 {Shift}-Ctrl-M              jump_to_matching_bracket
+Enter                       open_entry_in_place
+Tab                         focus_next_ui_element
+Shift-Tab                   focus_previous_ui_element
 
 [[settings]]
 
@@ -1651,6 +1688,12 @@ show_ruler_at_column:                            0
 detect_indentation:                              true  # if true, existing files will be scanned to detect indentation, new files will use the `indent_using` and `tab_size` settings
 status_bar_show_indentation:                     true
 status_bar_show_line_col:                        true
+show_scrollbar_marks:                            true
+scrollbar_width_scale:                           1.0
+scrollbar_min_opacity:                           0.0   # if you want the scrollbar to be always visible, set this to 1.0
+scrollbar_max_opacity:                           1.0
+scrollbar_fade_in_sensitivity:                   10.0  # controls when the scrollbar appears as the mouse pointer gets close
+scrollbar_fade_out_delay_seconds:                2.0   # how long the scrollbar stays visible after scrolling
 
 [[keymap]]
 # ...
@@ -1875,6 +1918,9 @@ Ctrl-F8                     go_to_next_build_error_on_the_side
 Shift-F8                    go_to_previous_build_error
 Shift-Ctrl-F8               go_to_previous_build_error_on_the_side
 {Shift}-Ctrl-M              jump_to_matching_bracket
+Enter                       open_entry_in_place
+Tab                         focus_next_ui_element
+Shift-Tab                   focus_previous_ui_element
 
 FOCUS_CONFIG
 
@@ -1954,6 +2000,9 @@ Ctrl-F8                     go_to_next_build_error_on_the_side
 Shift-F8                    go_to_previous_build_error
 Shift-Ctrl-F8               go_to_previous_build_error_on_the_side
 {Shift}-Ctrl-M              jump_to_matching_bracket
+Enter                       open_entry_in_place
+Tab                         focus_next_ui_element
+Shift-Tab                   focus_previous_ui_element
 
 [search dialog]
 Enter                       open_entry_in_place

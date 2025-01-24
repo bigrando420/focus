@@ -550,11 +550,11 @@ tokenize_for_indentation :: (buffer: *Buffer) -> [] Indentation_Token /* temp */
         case .Cpp;          return tokenize_c_like_lang_for_indentation(buffer, get_next_cpp_token);
         case .Css;          return tokenize_c_like_lang_for_indentation(buffer, get_next_css_token);
         case .D;            return tokenize_c_like_lang_for_indentation(buffer, get_next_d_token);
-        case .Js;           return tokenize_c_like_lang_for_indentation(buffer, get_next_js_token);
+        case .Js;           return tokenize_js_for_indentation(buffer);
         case .Json;         return tokenize_c_like_lang_for_indentation(buffer, get_next_json_token);
         case .Glsl;         return tokenize_c_like_lang_for_indentation(buffer, get_next_glsl_token);
         case .Hlsl;         return tokenize_c_like_lang_for_indentation(buffer, get_next_hlsl_token);
-        case .Swift;        return tokenize_c_like_lang_for_indentation(buffer, get_next_swift_token);
+        case .Swift;        return tokenize_swift_for_indentation(buffer);
         case .Zig;          return tokenize_c_like_lang_for_indentation(buffer, get_next_zig_token);
         case .Html;         return tokenize_xml_for_indentation(buffer);
         case .Xml;          return tokenize_xml_for_indentation(buffer);
@@ -562,6 +562,7 @@ tokenize_for_indentation :: (buffer: *Buffer) -> [] Indentation_Token /* temp */
         case .Odin;         return tokenize_odin_for_indentation(buffer);
         case .Rust;         return tokenize_rust_for_indentation(buffer);
         case .Batch;        return tokenize_batch_for_indentation(buffer);
+        case .Shell;        return tokenize_shell_for_indentation(buffer);
     }
 
     return .[];
@@ -830,7 +831,6 @@ reroute_active_editor :: (old_buffer_id: s64, new_buffer_id: s64) {
     if editor.buffer_id == old_buffer_id {
         editor.buffer_id = new_buffer_id;
         editor.scroll_to_cursor = .yes;
-        for * cursor : editor.cursors { put_cursor_in_valid_spot(cursor, new_buffer); }
         organise_cursors(editor);
 
         assert(old_buffer.num_editors_open >= 1, "Buffer doesn't have the right number of open editors. This is a bug");
@@ -1300,8 +1300,8 @@ detect_and_set_indentation :: (using buffer: *Buffer) -> enum { success; error; 
             // Mixed spaces and tabs on the same line, ignore
         } else if num_tabs {
             num_lines_with_tabs += 1;
-        } else if num_spaces > 0 && num_spaces < MAX_INDENT {
-            num_lines_with_spaces += 1;
+        } else if num_spaces >= 0 && num_spaces < MAX_INDENT {
+            if num_spaces > 0 then num_lines_with_spaces += 1;
 
             difference_from_prev_line := abs(last_indent - num_spaces);
             if difference_from_prev_line > 0 && difference_from_prev_line < MAX_INDENT {
@@ -1605,6 +1605,7 @@ get_tokenize_function :: (lang: Buffer.Lang) -> Tokenize_Function {
         case .Python;               return tokenize_python;
         case .RenPy;                return tokenize_renpy;
         case .Rust;                 return tokenize_rust;
+        case .Shell;                return tokenize_shell;
         case .Html;                 return tokenize_xml;
         case .Xml;                  return tokenize_xml;
         case .Todo;                 return tokenize_todo;
@@ -1852,6 +1853,7 @@ Buffer :: struct {
         Markdown;
         Batch;
         Swift;
+        Shell;
         Focus_Config;
         Focus_Theme;
         Focus_Build_Panel;  // a fake lang to be assigned to the build panel instead of Plain_Text so that its tokens are preserved
