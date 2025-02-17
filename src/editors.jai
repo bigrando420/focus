@@ -819,7 +819,7 @@ all_cursors_can_auto_insert_closing_bracket :: (using editor: Editor, buffer: Bu
         if has_selection(it) return false;
         ch := get_char_at_offset(buffer, it.pos);
 
-        if !is_whitespace_char(xx ch) && !(is_non_word_char(ch) && !is_auto_closeable_char(ch)) {
+        if ch && !is_whitespace_char(xx ch) && !(is_non_word_char(ch) && !is_auto_closeable_char(ch)) {
             return false;
         }
     }
@@ -1280,6 +1280,7 @@ get_lang_from_path :: (full_path: string) -> Buffer.Lang {
         case "focus-theme";     lang = .Focus_Theme;
         case "go";              lang = .Golang;
         case "lua";             lang = .Lua;
+        case "java";            lang = .Java;
         case "odin";            lang = .Odin;
         case "py";              lang = .Python;
         case "rpy";             lang = .RenPy;
@@ -1343,6 +1344,8 @@ get_lang_from_path :: (full_path: string) -> Buffer.Lang {
         case "shlib";           lang = .Shell;
         case "bash";            lang = .Shell;
         case "zsh";             lang = .Shell;
+
+        case "ini";             lang = .Ini;
 
         case;
             // Files named `.focus_config` are assumed to have no extension
@@ -3441,6 +3444,7 @@ toggle_comment :: (editor: *Editor, buffer: *Buffer, is_fallback := false) {
         case .Glsl;   #through;
         case .Hlsl;   #through;
         case .Golang; #through;
+        case .Java;   #through;
         case .Js;     #through;
         case .Json;   #through;
         case .Odin;   #through;
@@ -3462,6 +3466,9 @@ toggle_comment :: (editor: *Editor, buffer: *Buffer, is_fallback := false) {
 
         case .Batch;
             comment = "rem";
+
+        case .Ini;
+            comment = ";";
 
         // Single-line comments are not supported, fallback to multi-line comment
         case .Css;      #through;
@@ -3661,6 +3668,7 @@ toggle_block_comment :: (editor: *Editor, buffer: *Buffer, is_fallback := false)
         case .Glsl;   #through;
         case .Hlsl;   #through;
         case .Golang; #through;
+        case .Java;   #through;
         case .Js;     #through;
         case .Json;   #through;
         case .Odin;   #through;
@@ -3694,6 +3702,7 @@ toggle_block_comment :: (editor: *Editor, buffer: *Buffer, is_fallback := false)
         case .RenPy;        #through; // Yeah, there is a trick but meh (https://lemmasoft.renai.us/forums/viewtopic.php?p=299664#p299664 in case someone would like to implement it)
         case .Shell;        #through; // You could with herestrings but it runs into having to use specific identifiers like #string in Jai so let's not
         case .Zig;          #through;
+        case .Ini;          #through;
         case .Focus_Config; #through;
         case .Focus_Theme;
             assert(!is_fallback, "Infinite recursion");

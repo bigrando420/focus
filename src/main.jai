@@ -992,6 +992,7 @@ focus_allocator: Allocator;
 #load "langs/glsl.jai";
 #load "langs/hlsl.jai";
 #load "langs/golang.jai";
+#load "langs/java.jai";
 #load "langs/js.jai";
 #load "langs/json.jai";
 #load "langs/lua.jai";
@@ -1008,6 +1009,7 @@ focus_allocator: Allocator;
 #load "langs/markdown.jai";
 #load "langs/batch.jai";
 #load "langs/swift.jai";
+#load "langs/ini.jai";
 
 #if OS == .WINDOWS {
     #load "platform/windows.jai";

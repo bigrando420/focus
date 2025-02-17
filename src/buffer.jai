@@ -550,6 +550,7 @@ tokenize_for_indentation :: (buffer: *Buffer) -> [] Indentation_Token /* temp */
         case .Cpp;          return tokenize_c_like_lang_for_indentation(buffer, get_next_cpp_token);
         case .Css;          return tokenize_c_like_lang_for_indentation(buffer, get_next_css_token);
         case .D;            return tokenize_c_like_lang_for_indentation(buffer, get_next_d_token);
+        case .Java;         return tokenize_c_like_lang_for_indentation(buffer, get_next_java_token);
         case .Js;           return tokenize_js_for_indentation(buffer);
         case .Json;         return tokenize_c_like_lang_for_indentation(buffer, get_next_json_token);
         case .Glsl;         return tokenize_c_like_lang_for_indentation(buffer, get_next_glsl_token);
@@ -1300,8 +1301,8 @@ detect_and_set_indentation :: (using buffer: *Buffer) -> enum { success; error; 
             // Mixed spaces and tabs on the same line, ignore
         } else if num_tabs {
             num_lines_with_tabs += 1;
-        } else if num_spaces >= 0 && num_spaces < MAX_INDENT {
-            if num_spaces > 0 then num_lines_with_spaces += 1;
+        } else if num_spaces > 0 && num_spaces < MAX_INDENT {
+            num_lines_with_spaces += 1;
 
             difference_from_prev_line := abs(last_indent - num_spaces);
             if difference_from_prev_line > 0 && difference_from_prev_line < MAX_INDENT {
@@ -1316,6 +1317,8 @@ detect_and_set_indentation :: (using buffer: *Buffer) -> enum { success; error; 
                 //     ...
                 //
             }
+            last_indent = num_spaces;
+        } else {
             last_indent = num_spaces;
         }
 
@@ -1598,6 +1601,7 @@ get_tokenize_function :: (lang: Buffer.Lang) -> Tokenize_Function {
         case .Glsl;                 return tokenize_glsl;
         case .Hlsl;                 return tokenize_hlsl;
         case .Golang;               return tokenize_golang;
+        case .Java;                 return tokenize_java;
         case .Js;                   return tokenize_js;
         case .Json;                 return tokenize_json;
         case .Lua;                  return tokenize_lua;
@@ -1615,6 +1619,7 @@ get_tokenize_function :: (lang: Buffer.Lang) -> Tokenize_Function {
         case .Markdown;             return tokenize_markdown;
         case .Batch;                return tokenize_batch;
         case .Swift;                return tokenize_swift;
+        case .Ini;                  return tokenize_ini;
         case .Focus_Config;         return tokenize_focus_config;
         case .Focus_Theme;          return tokenize_focus_config;
         case .Focus_Build_Panel;    return null;
@@ -1837,6 +1842,7 @@ Buffer :: struct {
         Glsl;
         Hlsl;
         Golang;
+        Java;
         Js;
         Json;
         Lua;
@@ -1854,6 +1860,7 @@ Buffer :: struct {
         Batch;
         Swift;
         Shell;
+        Ini;
         Focus_Config;
         Focus_Theme;
         Focus_Build_Panel;  // a fake lang to be assigned to the build panel instead of Plain_Text so that its tokens are preserved

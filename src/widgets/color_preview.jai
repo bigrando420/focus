@@ -305,6 +305,7 @@ get_language_sample_text :: (lang: Buffer.Lang) -> string {
         case .Glsl;              return SAMPLE_Glsl;
         case .Hlsl;              return SAMPLE_Hlsl;
         case .Golang;            return SAMPLE_Golang;
+        case .Java;              return SAMPLE_Java;
         case .Js;                return SAMPLE_Js;
         case .Json;              return SAMPLE_Json;
         case .Lua;               return SAMPLE_Lua;
@@ -322,6 +323,7 @@ get_language_sample_text :: (lang: Buffer.Lang) -> string {
         case .Batch;             return SAMPLE_Batch;
         case .Swift;             return SAMPLE_Swift;
         case .Shell;             return SAMPLE_Shell;
+        case .Ini;               return SAMPLE_Ini;
 
         case .Plain_Text;        #through;
         case .Focus_Config;      #through;
