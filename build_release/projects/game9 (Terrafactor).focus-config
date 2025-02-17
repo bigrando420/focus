@@ -42,10 +42,10 @@ build_working_dir:      C:/rando/dev/game9
 timeout_in_seconds:     5
 key_binding:            F1
 
-[Debug Build]
-build_command:          build_web.bat
-build_working_dir:      C:/rando/dev/game9
-key_binding:            F2
+#[Debug Build]
+#build_command:          build_web.bat
+#build_working_dir:      C:/rando/dev/game9
+#key_binding:            F2
 
 [Run]
 run_command:            sauce.exe

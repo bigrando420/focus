@@ -3,44 +3,30 @@
 [[workspace]]
 # These directories and files will be scanned when a workspace is opened so that search etc. works.
 # Example:
-# C:/projects/my-project
-C:/rando/dev/terrafactor-site
+C:/rando/dev/game9/ship.jai
+
+C:/rando/dev/jai/how_to
+C:/rando/dev/jai/modules
+#C:/rando/dev/jai/changelog.txt
 
 [ignore]
-.env
-**/.git/**
-**/node_modules/**
 
-[file associations]
-todo.txt : todo
 
 [[build commands]]
-build_working_dir:      C:/rando/dev/terrafactor-site
+build_working_dir: C:/rando/dev/game9
 open_panel_on_build:    true
 # close_panel_on_success: false
 clear_build_output_before_running: true
-# error_regex:            <compiler-specific error regex>  # see examples below
-# auto_jump_to_error:     false
 
-[Build]
-build_command:          go build  # should be an executable or a script
+error_regex: ^(?P<file>.*):(?P<line>\d+),(?P<col>\d+): (?P<type>Error|Warning|Info|...):* (?P<msg>.*)|^(?P<msg1>.*error LNK.*)
+auto_jump_to_error: true
+
+[Ship]
+build_command:          jai ship.jai
+build_working_dir:      C:/rando/dev/game9
 key_binding:            F1
 
-[Run]
-run_command:            cmd /C "npm run dev"
-key_binding:            F3
 
-# [Release]
-# build_command:          jai first.jai - release
-# key_binding:            F9
-
-
-# Example error regexes:
-# For jai:    ^(?P<file>.*):(?P<line>\d+),(?P<col>\d+): (?P<type>Error|Warning|Info|...):* (?P<msg>.*)|^(?P<msg1>.*error LNK.*)
-# For msvc:   ^(?P<file>.*)\((?P<line>\d+),?(?P<col>\d+)?\)[ ]?: (?P<type>error|warning) (?P<msg>.*)$
-# For golang: ^(?P<file>.*):(?P<line>\d+):(?P<col>\d+): (?P<msg>.*)$
-# For gcc:    ^(?P<file>.*):(?P<line>\d+):(?P<col>\d+): (?P<type>error|warning): (?P<msg>.*) (\[(?P<msg1>.*)\])?$
-# ... let us know what regex works for you and we'll add it here
 
 # NOTE:
 # You can use the following variables in build_command or run_command:
@@ -60,7 +46,4 @@ key_binding:            F3
 
 [[style]]
 
-theme: default
-
-[[settings]]
-build_panel_stays_in_one_place:         true
+# theme: gruvbox-flat
